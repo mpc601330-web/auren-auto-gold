@@ -1,7 +1,7 @@
 # auto_gold.py — ORQUESTADOR EXTERNO AUREN AUTO GOLD
 # Llama a:
-# - AUREN-API-HUB: topic_money_flow, media_plan, quality_analyze
-# - AUREN-CREATIVE-ENGINE: genera guion PRO (si no furula → fallback local)
+# - AUREN-API-HUB: mind_run, topic_money_flow, media_plan, quality_analyze
+# - AUREN-CREATIVE-ENGINE: genera guion PRO (si falla → fallback local)
 #
 # Se ejecuta fuera de Hugging (por GitHub Actions o desde tu PC).
 
@@ -16,7 +16,9 @@ from gradio_client import Client
 # ==============================
 
 HUB_SPACE_ID = os.getenv("AUREN_HUB_SPACE_ID", "Mariapc601/AUREN-API-HUB").strip()
-CREATIVE_SPACE_ID = os.getenv("AUREN_CREATIVE_SPACE_ID", "Mariapc601/AUREN-CREATIVE-ENGINE").strip()
+CREATIVE_SPACE_ID = os.getenv(
+    "AUREN_CREATIVE_SPACE_ID", "Mariapc601/AUREN-CREATIVE-ENGINE"
+).strip()
 
 # Si tus Spaces son privados, usamos HF_TOKEN del entorno.
 HF_TOKEN = os.getenv("HF_TOKEN", "").strip()
@@ -25,18 +27,73 @@ HF_TOKEN = os.getenv("HF_TOKEN", "").strip()
 def get_client(space_id: str) -> Client:
     """
     Crea un cliente gradio_client para un Space.
-    Algunas versiones no aceptan hf_token como parámetro,
-    así que, si existe, lo dejamos en la variable de entorno HF_TOKEN
-    (gradio_client ya la sabe usar internamente).
+    Si existe HF_TOKEN, lo dejamos en la variable de entorno,
+    gradio_client ya sabe usarlo internamente.
     """
     if HF_TOKEN:
         os.environ["HF_TOKEN"] = HF_TOKEN
 
+    # Esto permite usar tanto "repo_id" (Mariapc601/SPACE)
+    # como URL completa de la API (https://xxxxx.hf.space)
     return Client(space_id)
 
 
 # ==============================
-# HELPERS: llamadas al HUB
+# 1) MIND ENGINE (HUB /mind_run)
+# ==============================
+
+def hub_mind_discover_topics(
+    niche: str,
+    country: str = "ES",
+    language: str = "es",
+    top_k: int = 7,
+) -> Dict[str, Any]:
+    """
+    Llama al endpoint /mind_run del HUB en modo "Discover hot topics".
+    Devuelve:
+      {
+        "markdown": str,            # salida completa de MIND ENGINE
+        "topics": [str, ...]        # lista de topics parseados
+      }
+    """
+    niche = (niche or "").strip()
+    if not niche:
+        return {"markdown": "", "topics": []}
+
+    client = get_client(HUB_SPACE_ID)
+    mode = "Discover hot topics"
+    manual_topics = ""
+
+    md = client.predict(
+        mode,
+        niche,
+        manual_topics,
+        country,
+        language,
+        int(top_k),
+        api_name="/mind_run",
+    )
+
+    if not isinstance(md, str):
+        md = str(md)
+
+    # Parsear líneas tipo: **1. tema**
+    topics: List[str] = []
+    for line in md.splitlines():
+        line = line.strip()
+        if line.startswith("**") and ". " in line:
+            inner = line.strip("*")  # quita los **
+            parts = inner.split(". ", 1)
+            if len(parts) == 2:
+                title = parts[1].strip()
+                if title:
+                    topics.append(title)
+
+    return {"markdown": md, "topics": topics}
+
+
+# ==============================
+# 2) EMPIRE SCALER (HUB /topic_money_flow)
 # ==============================
 
 def hub_topic_money_flow(topics: List[str], lang: str = "es") -> List[Dict[str, Any]]:
@@ -65,6 +122,10 @@ def hub_topic_money_flow(topics: List[str], lang: str = "es") -> List[Dict[str, 
         f"Respuesta inesperada de topic_money_flow: tipo {type(result)} | contenido: {str(result)[:200]}"
     )
 
+
+# ==============================
+# 3) MEDIA FACTORY (HUB /media_plan)
+# ==============================
 
 def hub_media_plan(script: str, want_thumb: bool, want_broll: bool) -> Dict[str, Any]:
     """
@@ -125,6 +186,10 @@ def hub_media_plan(script: str, want_thumb: bool, want_broll: bool) -> Dict[str,
     }
 
 
+# ==============================
+# 4) QUALITY ENGINE (HUB /quality_analyze)
+# ==============================
+
 def hub_quality_analyze(script: str, tipo: str) -> Dict[str, Any]:
     """
     Llama al endpoint /quality_analyze del HUB y normaliza la salida.
@@ -168,9 +233,8 @@ def hub_quality_analyze(script: str, tipo: str) -> Dict[str, Any]:
 
 
 # ==============================
-# HELPER: CREATIVE ENGINE
+# 5) CREATIVE ENGINE (Space + fallback)
 # ==============================
-
 
 def creative_generate_script(topic: str, emotion: str, platform: str) -> str:
     """
@@ -190,15 +254,17 @@ def creative_generate_script(topic: str, emotion: str, platform: str) -> str:
             if isinstance(result, str):
                 return result
             return str(result)
-
         except Exception as e:
             # Log técnico solo en consola, no en el guion
-            print(f"⚠️ Error llamando a AUREN-CREATIVE-ENGINE ({CREATIVE_SPACE_ID}):", e)
+            print(
+                f"⚠️ Error llamando a AUREN-CREATIVE-ENGINE ({CREATIVE_SPACE_ID}):",
+                e,
+            )
 
     # 2) FALLBACK LOCAL — Guion limpio y usable
     hook = (
-        f"Nadie te explicó de verdad qué es {topic}, pero cada día que no entiendes esto,"
-        " alguien gana dinero a tu costa."
+        f"Nadie te explicó de verdad qué es {topic}, "
+        "pero cada día que no entiendes esto, alguien gana dinero a tu costa."
     )
 
     script = f"""🧠 AUREN-CREATIVE-ENGINE (FALLBACK LOCAL)
@@ -221,9 +287,8 @@ Así que la próxima vez que escuches {topic}, no huyas: respira hondo, entiende
     return script
 
 
-
 # ==============================
-# PIPELINE GOLD COMPLETO
+# 6) PIPELINE GOLD COMPLETO
 # ==============================
 
 def run_gold_pipeline(
@@ -235,14 +300,15 @@ def run_gold_pipeline(
     run_quality: bool = True,
     lang_topics: str = "es",
     top_n: int = 1,
+    mind_markdown: str | None = None,
 ) -> str:
     """
     1) Calcula money_score para cada topic (HUB /topic_money_flow)
     2) Ordena descendente por money_score
     3) Para los TOP N:
-       - Llama a CREATIVE (guion)
-       - Llama a HUB /media_plan (miniatura + B-roll)
-       - Llama a HUB /quality_analyze (QA)
+       - CREATIVE (guion)
+       - MEDIA FACTORY (miniatura + B-roll via HUB)
+       - QUALITY (QA via HUB)
     Devuelve un markdown grande con todo.
     """
     if not topics:
@@ -254,13 +320,15 @@ def run_gold_pipeline(
     fused = []
     for topic, row in zip(topics, money_rows):
         ms = float(row.get("money_score", 0.0) or 0.0)
-        fused.append({
-            "topic": topic,
-            "views_30d": int(row.get("views_30d", 0) or 0),
-            "intent": float(row.get("intent", 0.0) or 0.0),
-            "ads_density": float(row.get("ads_density", 0.0) or 0.0),
-            "money_score": ms,
-        })
+        fused.append(
+            {
+                "topic": topic,
+                "views_30d": int(row.get("views_30d", 0) or 0),
+                "intent": float(row.get("intent", 0.0) or 0.0),
+                "ads_density": float(row.get("ads_density", 0.0) or 0.0),
+                "money_score": ms,
+            }
+        )
 
     fused.sort(key=lambda x: x["money_score"], reverse=True)
     top_n = max(1, min(top_n, len(fused)))
@@ -271,11 +339,19 @@ def run_gold_pipeline(
     out.append("# 🟣 AUREN AUTO GOLD — RUN EXTERNO\n")
     out.append(
         "Este script se ejecuta **fuera de HuggingFace** y orquesta:\n"
-        "- EMPIRE (money_score via HUB)\n"
-        "- CREATIVE (guion)\n"
-        "- MEDIA FACTORY (miniatura + B-roll via HUB)\n"
-        "- QUALITY (QA via HUB)\n"
+        "- MIND ENGINE (topics calientes vía HUB)\n"
+        "- EMPIRE SCALER (money_score vía HUB)\n"
+        "- CREATIVE ENGINE (guion)\n"
+        "- MEDIA FACTORY (miniatura + B-roll vía HUB)\n"
+        "- QUALITY ENGINE (QA vía HUB)\n"
     )
+
+    # Bloque MIND ENGINE (si existe)
+    if mind_markdown:
+        out.append("\n## 🧠 MIND ENGINE — Discover hot topics\n")
+        out.append("```markdown")
+        out.append(mind_markdown)
+        out.append("```")
 
     # Tabla ranking
     out.append("\n## 💰 Ranking de topics por money_score\n")
@@ -318,7 +394,11 @@ def run_gold_pipeline(
 
         # QUALITY
         if run_quality:
-            if "short" in platform.lower() or "tiktok" in platform.lower() or "reels" in platform.lower():
+            if (
+                "short" in platform.lower()
+                or "tiktok" in platform.lower()
+                or "reels" in platform.lower()
+            ):
                 tipo = "Short motivacional (rápido)"
             elif "long" in platform.lower():
                 tipo = "Vídeo largo storytelling"
@@ -334,26 +414,48 @@ def run_gold_pipeline(
 
 
 # ==============================
-# ENTRYPOINT
+# 7) ENTRYPOINT
 # ==============================
 
 def main():
     # ==========================
     # CONFIG RÁPIDA DEL RUN
-    # (puedes cambiar estos topics cuando quieras)
     # ==========================
-    topics = [
-        "criptomonedas para principiantes",
-        "teletrabajo y productividad",
-        "historias de millonarios fracasados",
-    ]
+
+    # 1) Config de MIND ENGINE
+    USE_MIND_ENGINE = True
+    mind_niche = "dinero y libertad"
+    mind_country = "ES"
+    mind_language = "es"
+    mind_top_k = 7
+
+    mind_md = ""
+    topics: List[str] = []
+
+    if USE_MIND_ENGINE:
+        mind_result = hub_mind_discover_topics(
+            niche=mind_niche,
+            country=mind_country,
+            language=mind_language,
+            top_k=mind_top_k,
+        )
+        mind_md = mind_result.get("markdown", "") or ""
+        topics = mind_result.get("topics", []) or []
+
+    # 2) Si MIND falla o no devuelve nada, usamos una lista manual
+    if not topics:
+        topics = [
+            "criptomonedas para principiantes",
+            "teletrabajo y productividad",
+            "historias de millonarios fracasados",
+        ]
 
     emotion = "Motivador"
     platform = "YouTube Shorts"
     want_thumb = True
     want_broll = True
     run_quality = True
-    lang_topics = "es"
+    lang_topics = mind_language or "es"
     top_n = 1  # cuántos TOP quieres procesar a fondo
 
     markdown = run_gold_pipeline(
@@ -365,6 +467,7 @@ def main():
         run_quality=run_quality,
         lang_topics=lang_topics,
         top_n=top_n,
+        mind_markdown=mind_md,
     )
 
     # Imprimimos el resultado en consola (Actions lo guardará en logs)
@@ -373,4 +476,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
