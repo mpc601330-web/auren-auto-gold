@@ -1,0 +1,29 @@
+name: AUREN AUTO GOLD
+
+on:
+  workflow_dispatch:   # Permite ejecutarlo a mano con un botón
+  schedule:
+    - cron: "0 */6 * * *"   # (Opcional) Ejecutar cada 6 horas — puedes cambiarlo o quitarlo
+
+jobs:
+  run-auren-gold:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: |
+          pip install requests gradio_client transformers
+
+      - name: Run AUREN AUTO GOLD script
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          python auto_gold.py
