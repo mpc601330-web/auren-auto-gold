@@ -171,9 +171,6 @@ def hub_quality_analyze(script: str, tipo: str) -> Dict[str, Any]:
 # HELPER: CREATIVE ENGINE
 # ==============================
 
-# ==============================
-# HELPER: CREATIVE ENGINE
-# ==============================
 
 def creative_generate_script(topic: str, emotion: str, platform: str) -> str:
     """
@@ -223,21 +220,6 @@ Así que la próxima vez que escuches {topic}, no huyas: respira hondo, entiende
 
     return script
 
-
-    except Exception as e:
-        # 👇 Fallback elegante: no tiramos el job, devolvemos texto usable
-        return (
-            "🧠 AUREN-CREATIVE-ENGINE (FALLBACK LOCAL)\n\n"
-            f"Tema: {topic}\n"
-            f"Emoción: {emotion} | Plataforma: {platform}\n\n"
-            f"[AVISO] No se pudo llamar al Space remoto "
-            f"({CREATIVE_SPACE_ID}): {e}\n\n"
-            "Genera un guion manual a partir de esto:\n"
-            f"- Hook: una frase muy fuerte sobre {topic} que haga daño o despierte curiosidad.\n"
-            "- Cuerpo: 2–4 ideas clave explicadas con ejemplos de la vida real.\n"
-            "- Giro: muestra una consecuencia inesperada o una verdad incómoda.\n"
-            "- Cierre: una frase final que resuma el mensaje en una línea memorable.\n"
-        )
 
 
 # ==============================
