@@ -1,3 +1,10 @@
+# auto_gold.py — ORQUESTADOR EXTERNO AUREN AUTO GOLD
+# Llama a:
+# - AUREN-API-HUB: topic_money_flow, media_plan, quality_analyze
+# - AUREN-CREATIVE-ENGINE: genera guion PRO
+#
+# Se ejecuta fuera de Hugging (por GitHub Actions o desde tu PC).
+
 import os
 import json
 from typing import List, Dict, Any
@@ -11,11 +18,15 @@ from gradio_client import Client
 HUB_SPACE_ID = os.getenv("AUREN_HUB_SPACE_ID", "Mariapc601/AUREN-API-HUB").strip()
 CREATIVE_SPACE_ID = os.getenv("AUREN_CREATIVE_SPACE_ID", "Mariapc601/AUREN-CREATIVE-ENGINE").strip()
 
-# Si tus Spaces son privados, usaremos HF_TOKEN del entorno.
+# Si tus Spaces son privados, usamos HF_TOKEN del entorno.
 HF_TOKEN = os.getenv("HF_TOKEN", "").strip()
 
 
 def get_client(space_id: str) -> Client:
+    """
+    Crea un cliente gradio_client para un Space,
+    usando HF_TOKEN si existe (para Spaces privados).
+    """
     if HF_TOKEN:
         return Client(space_id, hf_token=HF_TOKEN)
     return Client(space_id)
@@ -26,17 +37,25 @@ def get_client(space_id: str) -> Client:
 # ==============================
 
 def hub_topic_money_flow(topics: List[str], lang: str = "es") -> List[Dict[str, Any]]:
+    """
+    Llama al endpoint /topic_money_flow del HUB y devuelve SIEMPRE una lista de dicts.
+    Cada dict incluye: topic, views_30d, intent, ads_density, money_score.
+    """
     client = get_client(HUB_SPACE_ID)
     topics_json = json.dumps(topics, ensure_ascii=False)
+
     result = client.predict(
         topics_json,
         lang,
         api_name="/topic_money_flow",
     )
 
+    # HUB actual devuelve lista directa
     if isinstance(result, list):
         return result
-    if isinstance(result, dict) and "results" in result and isinstance(result["results"], list):
+
+    # Por si en el futuro volvemos a {"results": [...]}
+    if isinstance(result, dict) and isinstance(result.get("results"), list):
         return result["results"]
 
     raise RuntimeError(
@@ -45,6 +64,16 @@ def hub_topic_money_flow(topics: List[str], lang: str = "es") -> List[Dict[str, 
 
 
 def hub_media_plan(script: str, want_thumb: bool, want_broll: bool) -> Dict[str, Any]:
+    """
+    Llama al endpoint /media_plan del HUB y normaliza la salida.
+    Devuelve dict:
+    {
+      "plan": str | None,
+      "thumbnail_plan": str | None,
+      "broll_plan": str | None,
+      "raw": respuesta_original
+    }
+    """
     client = get_client(HUB_SPACE_ID)
     result = client.predict(
         script.strip(),
@@ -53,6 +82,7 @@ def hub_media_plan(script: str, want_thumb: bool, want_broll: bool) -> Dict[str,
         api_name="/media_plan",
     )
 
+    # String plano
     if isinstance(result, str):
         return {
             "plan": result,
@@ -61,10 +91,12 @@ def hub_media_plan(script: str, want_thumb: bool, want_broll: bool) -> Dict[str,
             "raw": result,
         }
 
+    # Dict estructurado
     if isinstance(result, dict):
         plan = result.get("plan")
         thumb = result.get("thumbnail_plan")
         broll = result.get("broll_plan")
+
         if not any([plan, thumb, broll]):
             txt = json.dumps(result, ensure_ascii=False, indent=2)
             return {
@@ -73,6 +105,7 @@ def hub_media_plan(script: str, want_thumb: bool, want_broll: bool) -> Dict[str,
                 "broll_plan": None,
                 "raw": result,
             }
+
         return {
             "plan": plan,
             "thumbnail_plan": thumb,
@@ -80,6 +113,7 @@ def hub_media_plan(script: str, want_thumb: bool, want_broll: bool) -> Dict[str,
             "raw": result,
         }
 
+    # Tipo raro
     return {
         "plan": f"⚠️ Respuesta inesperada de /media_plan: {type(result)} | {str(result)[:200]}",
         "thumbnail_plan": None,
@@ -89,6 +123,16 @@ def hub_media_plan(script: str, want_thumb: bool, want_broll: bool) -> Dict[str,
 
 
 def hub_quality_analyze(script: str, tipo: str) -> Dict[str, Any]:
+    """
+    Llama al endpoint /quality_analyze del HUB y normaliza la salida.
+    Devuelve dict:
+    {
+      "informe": str | None,
+      "metrics": dict,
+      "sentiment": dict,
+      "suggestions": list[str]
+    }
+    """
     client = get_client(HUB_SPACE_ID)
     result = client.predict(
         script,
@@ -120,7 +164,16 @@ def hub_quality_analyze(script: str, tipo: str) -> Dict[str, Any]:
     }
 
 
+# ==============================
+# HELPER: CREATIVE ENGINE
+# ==============================
+
 def creative_generate_script(topic: str, emotion: str, platform: str) -> str:
+    """
+    Llama al Space AUREN-CREATIVE-ENGINE.
+    Ese Space tiene un solo botón, así que usamos predict() sin api_name.
+    Orden de inputs: idea, emotion, platform.
+    """
     client = get_client(CREATIVE_SPACE_ID)
     result = client.predict(
         topic,     # idea
@@ -133,7 +186,7 @@ def creative_generate_script(topic: str, emotion: str, platform: str) -> str:
 
 
 # ==============================
-# PIPELINE GOLD
+# PIPELINE GOLD COMPLETO
 # ==============================
 
 def run_gold_pipeline(
@@ -146,6 +199,15 @@ def run_gold_pipeline(
     lang_topics: str = "es",
     top_n: int = 1,
 ) -> str:
+    """
+    1) Calcula money_score para cada topic (HUB /topic_money_flow)
+    2) Ordena descendente por money_score
+    3) Para los TOP N:
+       - Llama a CREATIVE (guion)
+       - Llama a HUB /media_plan (miniatura + B-roll)
+       - Llama a HUB /quality_analyze (QA)
+    Devuelve un markdown grande con todo.
+    """
     if not topics:
         return "⚠️ No hay topics."
 
@@ -167,7 +229,7 @@ def run_gold_pipeline(
     top_n = max(1, min(top_n, len(fused)))
     top_topics = fused[:top_n]
 
-    out = []
+    out: List[str] = []
 
     out.append("# 🟣 AUREN AUTO GOLD — RUN EXTERNO\n")
     out.append(
@@ -234,12 +296,15 @@ def run_gold_pipeline(
     return "\n".join(out)
 
 
+# ==============================
+# ENTRYPOINT
+# ==============================
+
 def main():
     # ==========================
     # CONFIG RÁPIDA DEL RUN
+    # (puedes cambiar estos topics cuando quieras)
     # ==========================
-
-    # Aquí pones los topics que quieres que el GOLD analice hoy:
     topics = [
         "criptomonedas para principiantes",
         "teletrabajo y productividad",
