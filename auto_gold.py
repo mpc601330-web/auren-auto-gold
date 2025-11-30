@@ -171,33 +171,58 @@ def hub_quality_analyze(script: str, tipo: str) -> Dict[str, Any]:
 # HELPER: CREATIVE ENGINE
 # ==============================
 
+# ==============================
+# HELPER: CREATIVE ENGINE
+# ==============================
+
 def creative_generate_script(topic: str, emotion: str, platform: str) -> str:
     """
     Intenta llamar al Space AUREN-CREATIVE-ENGINE.
     Si falla (404, privado, token, etc.), NO revienta el pipeline:
-    devuelve un guion generado por fallback local (texto guía).
+    devuelve un guion completo generado por fallback local.
     """
-    # 1) Si no hay repo configurado, ni lo intentamos
-    if not CREATIVE_SPACE_ID:
-        return (
-            "🧠 AUREN-CREATIVE-ENGINE (FALLBACK LOCAL)\n\n"
-            f"Tema: {topic}\n"
-            f"Emoción: {emotion} | Plataforma: {platform}\n\n"
-            "No se ha configurado AUREN_CREATIVE_SPACE_ID.\n"
-            "Escribe un guion corto explicando este tema con un hook fuerte al inicio, "
-            "2–3 ideas potentes y un cierre contundente."
-        )
+    # 1) Intento normal: Space remoto
+    if CREATIVE_SPACE_ID:
+        try:
+            client = get_client(CREATIVE_SPACE_ID)
+            result = client.predict(
+                topic,     # idea
+                emotion,   # emotion dropdown
+                platform,  # platform dropdown
+            )
+            if isinstance(result, str):
+                return result
+            return str(result)
 
-    try:
-        client = get_client(CREATIVE_SPACE_ID)
-        result = client.predict(
-            topic,     # idea
-            emotion,   # emotion dropdown
-            platform,  # platform dropdown
-        )
-        if isinstance(result, str):
-            return result
-        return str(result)
+        except Exception as e:
+            # Log técnico solo en consola, no en el guion
+            print(f"⚠️ Error llamando a AUREN-CREATIVE-ENGINE ({CREATIVE_SPACE_ID}):", e)
+
+    # 2) FALLBACK LOCAL — Guion limpio y usable
+    hook = (
+        f"Nadie te explicó de verdad qué es {topic}, pero cada día que no entiendes esto,"
+        " alguien gana dinero a tu costa."
+    )
+
+    script = f"""🧠 AUREN-CREATIVE-ENGINE (FALLBACK LOCAL)
+
+{hook}
+
+Mira, {topic} no va de hacerte rico rápido, va de entender un sistema nuevo de dinero que ya está aquí aunque hagas como que no existe.
+
+Primero, lo simple: te explico en palabras normales qué es y qué no es {topic}, sin tecnicismos ni humo.
+
+Luego, los errores que comete todo principiante: entrar por hype, invertir lo que no tiene y seguir consejos de gente que ni enseña su cara.
+
+Después, la parte útil: 2–3 pasos concretos para empezar sin arruinarte, con cantidades pequeñas y reglas claras.
+
+Y después, la verdad incómoda: si no entiendes cómo funciona el juego del dinero, siempre juegas en el equipo que pierde.
+
+Así que la próxima vez que escuches {topic}, no huyas: respira hondo, entiende las reglas… y juega a tu favor.
+"""
+
+    return script
+
 
     except Exception as e:
         # 👇 Fallback elegante: no tiramos el job, devolvemos texto usable
