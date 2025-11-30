@@ -1,7 +1,7 @@
 # auto_gold.py — ORQUESTADOR EXTERNO AUREN AUTO GOLD
 # Llama a:
 # - AUREN-API-HUB: topic_money_flow, media_plan, quality_analyze
-# - AUREN-CREATIVE-ENGINE: genera guion PRO
+# - AUREN-CREATIVE-ENGINE: genera guion PRO (si no furula → fallback local)
 #
 # Se ejecuta fuera de Hugging (por GitHub Actions o desde tu PC).
 
@@ -173,19 +173,46 @@ def hub_quality_analyze(script: str, tipo: str) -> Dict[str, Any]:
 
 def creative_generate_script(topic: str, emotion: str, platform: str) -> str:
     """
-    Llama al Space AUREN-CREATIVE-ENGINE.
-    Ese Space tiene un solo botón, así que usamos predict() sin api_name.
-    Orden de inputs: idea, emotion, platform.
+    Intenta llamar al Space AUREN-CREATIVE-ENGINE.
+    Si falla (404, privado, token, etc.), NO revienta el pipeline:
+    devuelve un guion generado por fallback local (texto guía).
     """
-    client = get_client(CREATIVE_SPACE_ID)
-    result = client.predict(
-        topic,     # idea
-        emotion,   # emotion dropdown
-        platform,  # platform dropdown
-    )
-    if isinstance(result, str):
-        return result
-    return str(result)
+    # 1) Si no hay repo configurado, ni lo intentamos
+    if not CREATIVE_SPACE_ID:
+        return (
+            "🧠 AUREN-CREATIVE-ENGINE (FALLBACK LOCAL)\n\n"
+            f"Tema: {topic}\n"
+            f"Emoción: {emotion} | Plataforma: {platform}\n\n"
+            "No se ha configurado AUREN_CREATIVE_SPACE_ID.\n"
+            "Escribe un guion corto explicando este tema con un hook fuerte al inicio, "
+            "2–3 ideas potentes y un cierre contundente."
+        )
+
+    try:
+        client = get_client(CREATIVE_SPACE_ID)
+        result = client.predict(
+            topic,     # idea
+            emotion,   # emotion dropdown
+            platform,  # platform dropdown
+        )
+        if isinstance(result, str):
+            return result
+        return str(result)
+
+    except Exception as e:
+        # 👇 Fallback elegante: no tiramos el job, devolvemos texto usable
+        return (
+            "🧠 AUREN-CREATIVE-ENGINE (FALLBACK LOCAL)\n\n"
+            f"Tema: {topic}\n"
+            f"Emoción: {emotion} | Plataforma: {platform}\n\n"
+            f"[AVISO] No se pudo llamar al Space remoto "
+            f"({CREATIVE_SPACE_ID}): {e}\n\n"
+            "Genera un guion manual a partir de esto:\n"
+            f"- Hook: una frase muy fuerte sobre {topic} que haga daño o despierte curiosidad.\n"
+            "- Cuerpo: 2–4 ideas clave explicadas con ejemplos de la vida real.\n"
+            "- Giro: muestra una consecuencia inesperada o una verdad incómoda.\n"
+            "- Cierre: una frase final que resuma el mensaje en una línea memorable.\n"
+        )
 
 
 # ==============================
@@ -339,3 +366,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
