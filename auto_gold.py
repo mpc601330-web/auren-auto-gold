@@ -24,11 +24,14 @@ HF_TOKEN = os.getenv("HF_TOKEN", "").strip()
 
 def get_client(space_id: str) -> Client:
     """
-    Crea un cliente gradio_client para un Space,
-    usando HF_TOKEN si existe (para Spaces privados).
+    Crea un cliente gradio_client para un Space.
+    Algunas versiones no aceptan hf_token como parámetro,
+    así que, si existe, lo dejamos en la variable de entorno HF_TOKEN
+    (gradio_client ya la sabe usar internamente).
     """
     if HF_TOKEN:
-        return Client(space_id, hf_token=HF_TOKEN)
+        os.environ["HF_TOKEN"] = HF_TOKEN
+
     return Client(space_id)
 
 
