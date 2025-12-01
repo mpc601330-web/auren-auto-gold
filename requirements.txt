@@ -1,1 +1,2 @@
 gradio_client
+requests>=2.31.0
