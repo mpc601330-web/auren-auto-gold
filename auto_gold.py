@@ -411,10 +411,6 @@ def run_gold_pipeline(
     return "\n".join(out)
 
 
-# ==============================
-# ENTRYPOINT
-# ==============================
-
 def main():
     # CONFIG RÁPIDA DEL RUN
     niche = "dinero y libertad"
@@ -440,36 +436,45 @@ def main():
         top_n=top_n,
     )
 
-    # Imprimimos el resultado en consola (Actions lo guardará en logs)
     print(markdown)
 
     # ==========================
-    #  GUARDADO AUTOMÁTICO
+    #  GUARDADO AUTOMÁTICO /outputs
     # ==========================
-
-    # Creamos carpeta /outputs si no existe
     os.makedirs("outputs", exist_ok=True)
 
-    # Nombre bonito con timestamp
     from datetime import datetime
     ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
     md_path = f"outputs/auren_gold_{ts}.md"
     json_path = f"outputs/auren_gold_{ts}.json"
 
-    # Guardar Markdown
     with open(md_path, "w", encoding="utf-8") as f:
         f.write(markdown)
 
-    # Guardar JSON simple
     with open(json_path, "w", encoding="utf-8") as f:
         f.write(json.dumps({"output": markdown}, ensure_ascii=False, indent=2))
 
     print(f"\n💾 Guardado en: {md_path} y {json_path}")
 
+    # ==========================
+    #  EXPORTACIÓN /videos
+    # ==========================
+    os.makedirs("videos", exist_ok=True)
+
+    video_plan_path = f"videos/video_plan_{ts}.md"
+
+    video_plan_content = (
+        "# 🎬 AUREN VIDEO PLAN\n\n"
+        "## 📝 Guion + Producción\n\n"
+        f"{markdown}\n"
+    )
+
+    with open(video_plan_path, "w", encoding="utf-8") as f:
+        f.write(video_plan_content)
+
+    print(f"📦 Plan de vídeo guardado en: {video_plan_path}")
+
 
 if __name__ == "__main__":
     main()
-
-
-
