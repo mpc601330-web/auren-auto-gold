@@ -14,6 +14,8 @@ jobs:
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
       AUREN_HUB_SPACE_ID: "Mariapc601/AUREN-API-HUB"
       AUREN_CREATIVE_SPACE_ID: "Mariapc601/AUREN-CREATIVE-ENGINE"
+      PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+      PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
 
     steps:
       - name: Checkout repo
