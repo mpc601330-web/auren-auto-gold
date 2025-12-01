@@ -443,6 +443,30 @@ def main():
     # Imprimimos el resultado en consola (Actions lo guardará en logs)
     print(markdown)
 
+    # ==========================
+    #  GUARDADO AUTOMÁTICO
+    # ==========================
+
+    # Creamos carpeta /outputs si no existe
+    os.makedirs("outputs", exist_ok=True)
+
+    # Nombre bonito con timestamp
+    from datetime import datetime
+    ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+
+    md_path = f"outputs/auren_gold_{ts}.md"
+    json_path = f"outputs/auren_gold_{ts}.json"
+
+    # Guardar Markdown
+    with open(md_path, "w", encoding="utf-8") as f:
+        f.write(markdown)
+
+    # Guardar JSON simple
+    with open(json_path, "w", encoding="utf-8") as f:
+        f.write(json.dumps({"output": markdown}, ensure_ascii=False, indent=2))
+
+    print(f"\n💾 Guardado en: {md_path} y {json_path}")
+
 
 if __name__ == "__main__":
     main()
