@@ -285,9 +285,112 @@ Así que la próxima vez que escuches {topic}, no huyas: respira hondo, entiende
 
     return script
 
+import requests
 
 # ============================================================
-# 6) PIPELINE GOLD COMPLETO
+# 6) DESCARGA AUTOMÁTICA DE CLIPS (PEXELS / PIXABAY)
+# ============================================================
+
+def download_video(url: str, save_path: str):
+    """Descarga un archivo de vídeo desde una URL a la ruta indicada."""
+    try:
+        r = requests.get(url, stream=True, timeout=10)
+        r.raise_for_status()
+        with open(save_path, "wb") as f:
+            for chunk in r.iter_content(chunk_size=8192):
+                f.write(chunk)
+        return True
+    except Exception as e:
+        print(f"⚠️ Error descargando {url}: {e}")
+        return False
+def extract_keywords_from_plan(plan: str) -> list[str]:
+    """
+    Extrae palabras clave del plan de B-roll automáticamente.
+    Busca palabras relevantes (dinero, estrés, oficina, éxito…)
+    """
+    import re
+    words = re.findall(r"[a-zA-ZáéíóúñÁÉÍÓÚÑ]{4,}", plan.lower())
+
+    blacklist = {"porque", "cuando", "donde", "sobre", "según", "video", "broll", "miniatura"}
+    keywords = [w for w in words if w not in blacklist]
+
+    # Útiles como búsqueda
+    return list(set(keywords))[:10]   # máximo 10
+
+def pexels_search_and_download(keywords: list[str], target_folder: str, max_videos: int = 5):
+    api_key = os.getenv("PEXELS_API_KEY", "")
+    if not api_key:
+        print("⚠️ No PEXELS_API_KEY en GitHub Secrets")
+        return []
+
+    headers = {"Authorization": api_key}
+    saved_files = []
+
+    for kw in keywords:
+        url = f"https://api.pexels.com/videos/search?query={kw}&per_page=2"
+        try:
+            r = requests.get(url, headers=headers, timeout=10)
+            data = r.json()
+            for video in data.get("videos", []):
+                file_url = video["video_files"][0]["link"]
+                file_name = f"{kw}_{video['id']}.mp4"
+                file_path = os.path.join(target_folder, file_name)
+                if download_video(file_url, file_path):
+                    saved_files.append(file_path)
+                if len(saved_files) >= max_videos:
+                    return saved_files
+        except:
+            pass
+
+    return saved_files
+
+def pixabay_search_and_download(keywords: list[str], target_folder: str, max_videos: int = 5):
+    api_key = os.getenv("PIXABAY_API_KEY", "")
+    if not api_key:
+        print("⚠️ No PIXABAY_API_KEY en GitHub Secrets")
+        return []
+
+    saved_files = []
+
+    for kw in keywords:
+        url = f"https://pixabay.com/api/videos/?key={api_key}&q={kw}&per_page=2"
+        try:
+            r = requests.get(url, timeout=10)
+            data = r.json()
+            for hit in data.get("hits", []):
+                file_url = hit["videos"]["medium"]["url"]
+                file_name = f"{kw}_{hit['id']}.mp4"
+                file_path = os.path.join(target_folder, file_name)
+                if download_video(file_url, file_path):
+                    saved_files.append(file_path)
+                if len(saved_files) >= max_videos:
+                    return saved_files
+        except:
+            pass
+
+    return saved_files
+
+        # ==========================
+        #  DESCARGA AUTOMÁTICA DE CLIPS
+        # ==========================
+        assets_folder = f"videos/assets_{topic.replace(' ', '_')}"
+        os.makedirs(assets_folder, exist_ok=True)
+
+        # 1) Extraer keywords del plan de B-roll
+        kw = extract_keywords_from_plan(media.get("broll_plan", ""))
+
+        # 2) Descargar desde Pexels
+        pex_files = pexels_search_and_download(kw, assets_folder)
+
+        # 3) Descargar desde Pixabay
+        pix_files = pixabay_search_and_download(kw, assets_folder)
+
+        out.append("\n### 🎞️ Clips descargados automáticamente\n")
+        out.append(f"- Pexels: {len(pex_files)} vídeos")
+        out.append(f"- Pixabay: {len(pix_files)} vídeos")
+
+# ============================================================
+# 7) PIPELINE GOLD COMPLETO
 # ============================================================
 
 def run_gold_pipeline(
