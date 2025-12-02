@@ -3,7 +3,15 @@ from typing import List, Dict, Union
 from groq import Groq
 
 # Modelo por defecto de Groq (puedes cambiarlo por otro si quieres)
-DEFAULT_GROQ_MODEL = os.getenv("AUREN_GROQ_MODEL", "llama-3.1-70b-versatile")
+import os
+
+DEFAULT_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+
+resp = client.chat.completions.create(
+    model=DEFAULT_MODEL,
+    messages=messages,
+    ...
+)
 
 
 def _get_client() -> Groq:
