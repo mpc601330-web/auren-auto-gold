@@ -2,28 +2,35 @@ import os
 from typing import List, Dict, Union
 from groq import Groq
 
-# Modelo por defecto de Groq (puedes cambiarlo por otro si quieres)
-import os
+# =========================
+#  CONFIGURACIÓN DEL MODELO
+# =========================
 
+# Modelo por defecto de Groq (puedes cambiarlo por otro vía variable de entorno)
 DEFAULT_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
 
-resp = client.chat.completions.create(
-    model=DEFAULT_MODEL,
-    messages=messages,
-    ...
-)
+# Cliente global reutilizable
+_client: Groq | None = None
 
 
 def _get_client() -> Groq:
     """
-    Crea el cliente Groq usando la API key del entorno.
+    Crea (o reutiliza) el cliente de Groq usando la API key del entorno.
+    Lanza un error claro si falta la clave.
     """
+    global _client
+
+    if _client is not None:
+        return _client
+
     api_key = os.getenv("GROQ_API_KEY", "").strip()
     if not api_key:
         raise RuntimeError(
             "Falta GROQ_API_KEY en las variables de entorno / GitHub Secrets."
         )
-    return Groq(api_key=api_key)
+
+    _client = Groq(api_key=api_key)
+    return _client
 
 
 def _chat_with_messages(
@@ -34,9 +41,10 @@ def _chat_with_messages(
 ) -> str:
     """
     Llamada básica a Groq usando una lista de mensajes.
+    La usan los agentes internos.
     """
     client = _get_client()
-    model_name = model or DEFAULT_GROQ_MODEL
+    model_name = model or DEFAULT_MODEL
 
     resp = client.chat.completions.create(
         model=model_name,
@@ -44,6 +52,8 @@ def _chat_with_messages(
         temperature=temperature,
         max_tokens=max_tokens,
     )
+
+    # Groq devuelve el contenido en resp.choices[0].message.content
     return resp.choices[0].message.content.strip()
 
 
@@ -57,20 +67,21 @@ def chat_completion(
     """
     Wrapper flexible que usan los agentes.
 
-    Se puede llamar de dos formas:
+    Formas de uso:
 
-    1) chat_completion(system_prompt, user_prompt)
-    2) chat_completion(system_prompt=[{"role": "...", "content": "..."}])
+      1) chat_completion(system_prompt="...", user_prompt="...")
+      2) chat_completion(system_prompt=[{"role": "...", "content": "..."}])
 
-    - Si `system_prompt` es una lista, se asume que ya son messages.
-    - Si es un string, se usa como system y se combina con `user_prompt`.
+    - Si `system_prompt` es una lista, se asume que ya es la lista completa de mensajes.
+    - Si es un string, se construye la conversación con system + user.
     """
+
     # Caso 2: ya nos pasan messages (lista de dicts)
     if isinstance(system_prompt, list):
-        messages = system_prompt
+        messages = system_prompt  # type: ignore[assignment]
 
     else:
-        # Caso 1: system_prompt (str) + user_prompt
+        # Caso 1: system_prompt (str) + user_prompt (str)
         messages: List[Dict[str, str]] = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
@@ -83,4 +94,5 @@ def chat_completion(
         temperature=temperature,
         max_tokens=max_tokens,
     )
+
 
