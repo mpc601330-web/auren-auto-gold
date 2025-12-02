@@ -6,6 +6,7 @@
 #       /media_plan         (MEDIA FACTORY)
 #       /quality_analyze    (QUALITY ENGINE)
 # - AUREN-CREATIVE-ENGINE  → genera el guion PRO (si falla → fallback local)
+# - AUREN AGENTS (Groq)     → Angle Master, Script Doctor, Clip Splitter, etc.
 #
 # Se ejecuta fuera de Hugging (GitHub Actions o tu PC).
 
@@ -15,6 +16,18 @@ from typing import List, Dict, Any
 
 from gradio_client import Client
 import requests  # 👈 para Pexels / Pixabay
+
+# ==============================
+# IMPORT: AUREN AGENTS (carpeta /agents)
+# ==============================
+
+from agents.angle_master import run_agent as run_angle_master
+from agents.script_doctor import run_agent as run_script_doctor
+from agents.clip_splitter import run_agent as run_clip_splitter
+from agents.title_lab import run_agent as run_title_lab
+from agents.platform_translator import run_agent as run_platform_translator
+from agents.hotmart_engine import run_agent as run_hotmart_engine
+from agents.saas_engine import run_agent as run_saas_engine
 
 # ==============================
 # CONFIG: IDs de tus Spaces
@@ -235,7 +248,7 @@ def hub_quality_analyze(script: str, tipo: str) -> Dict[str, Any]:
 
 
 # ============================================================
-# 5) CREATIVE ENGINE — guion PRO (Space + fallback local)
+# 5) CREATIVE ENGINE — guion V1 (Space + fallback local)
 # ============================================================
 
 def creative_generate_script(topic: str, emotion: str, platform: str) -> str:
@@ -243,6 +256,8 @@ def creative_generate_script(topic: str, emotion: str, platform: str) -> str:
     Intenta llamar al Space AUREN-CREATIVE-ENGINE.
     Si falla (404, privado, token, etc.), NO revienta el pipeline:
     devuelve un guion completo generado por fallback local.
+
+    Ahora se usa como GUION V1, que luego pasa por SCRIPT_DOCTOR.
     """
     # 1) Intento normal: Space remoto
     if CREATIVE_SPACE_ID:
@@ -376,7 +391,7 @@ def pixabay_search_and_download(keywords: list[str], target_folder: str, max_vid
 
 
 # ============================================================
-# 7) PIPELINE GOLD COMPLETO
+# 7) PIPELINE GOLD COMPLETO (ya con AGENTES AUREN)
 # ============================================================
 
 def run_gold_pipeline(
@@ -395,9 +410,15 @@ def run_gold_pipeline(
     2) EMPIRE: calcula money_score para cada topic (HUB /topic_money_flow).
     3) Ordena descendente por money_score.
     4) Para los TOP N:
-       - Llama a CREATIVE (guion).
-       - Llama a HUB /media_plan (miniatura + B-roll).
-       - Llama a HUB /quality_analyze (QA).
+       - Genera ángulos (AUREN_ANGLE_MASTER).
+       - Llama a CREATIVE (guion V1).
+       - Refinado (AUREN_SCRIPT_DOCTOR → guion V2).
+       - Crea clips (AUREN_CLIP_SPLITTER).
+       - Títulos (AUREN_TITLE_LAB).
+       - Traducción por plataforma (AUREN_PLATFORM_TRANSLATOR).
+       - Hotmart + SaaS (AUREN_HOTMART_ENGINE + AUREN_SAAS_ENGINE).
+       - Llama a HUB /media_plan (miniatura + B-roll) con guion V2.
+       - Llama a HUB /quality_analyze (QA) con guion V2.
        - Descarga clips de apoyo (Pexels / Pixabay).
     Devuelve un markdown grande con todo.
     """
@@ -434,7 +455,8 @@ def run_gold_pipeline(
         "Este script se ejecuta **fuera de HuggingFace** y orquesta:\n"
         "- MIND ENGINE (topics calientes)\n"
         "- EMPIRE SCALER (money_score vía HUB)\n"
-        "- CREATIVE ENGINE (guion)\n"
+        "- CREATIVE ENGINE (guion V1)\n"
+        "- AUREN AGENTS (guion V2, clips, títulos, afiliados)\n"
         "- MEDIA FACTORY (miniatura + B-roll vía HUB)\n"
         "- QUALITY ENGINE (QA vía HUB)\n"
     )
@@ -458,6 +480,8 @@ def run_gold_pipeline(
     # Detalle de los TOP
     for idx, r in enumerate(top_topics, start=1):
         topic = r["topic"]
+        audience = "jóvenes que quieren ganar dinero con IA, negocios online y productividad"
+
         out.append("\n---\n")
         out.append(f"## 🔥 TOP {idx} — {topic}\n")
         out.append(
@@ -465,16 +489,116 @@ def run_gold_pipeline(
             f"Intent: **{r['intent']:.1f}%** | Ads: **{r['ads_density']:.1f}%**\n"
         )
 
-        # CREATIVE
-        out.append("### 🧠 Guion generado (AUREN-CREATIVE-ENGINE)\n")
-        script = creative_generate_script(topic, emotion, platform)
+        # ==========================
+        # AUREN_ANGLE_MASTER
+        # ==========================
+        out.append("### 🎯 Ángulos generados (AUREN_ANGLE_MASTER)\n")
+        angles_data = run_angle_master({
+            "topic": topic,
+            "audience": audience,
+            "emotion": emotion,
+            "platform": platform,
+            "num_angles": 12,
+        })
+        angles_text = angles_data.get("angles_raw", "").strip()
         out.append("```markdown")
-        out.append(script)
+        out.append(angles_text or "⚠️ No se generaron ángulos.")
         out.append("```")
 
-        # MEDIA PLAN
+        # ==========================
+        # CREATIVE ENGINE — GUION V1
+        # ==========================
+        out.append("### 🧠 Guion V1 generado (AUREN-CREATIVE-ENGINE)\n")
+        topic_with_angles = f"{topic}\n\nÁngulos sugeridos:\n{angles_text}" if angles_text else topic
+        script_v1 = creative_generate_script(topic_with_angles, emotion, platform)
+        out.append("```markdown")
+        out.append(script_v1)
+        out.append("```")
+
+        # ==========================
+        # SCRIPT DOCTOR — GUION V2
+        # ==========================
+        out.append("\n### ✍️ Guion V2 refinado (AUREN_SCRIPT_DOCTOR)\n")
+        script_v2_dict = run_script_doctor({
+            "script_v1": script_v1,
+            "emotion": emotion,
+            "platform": platform,
+            "audience": audience,
+            "style_notes": "Tono profesional, cercano, elegante, energía Pendragon.",
+        })
+        script_v2 = script_v2_dict.get("script_v2", script_v1)
+        out.append("```markdown")
+        out.append(script_v2)
+        out.append("```")
+
+        # ==========================
+        # CLIP SPLITTER — CLIPS
+        # ==========================
+        out.append("\n### 🎬 Clips generados (AUREN_CLIP_SPLITTER)\n")
+        clips_dict = run_clip_splitter({
+            "script_v2": script_v2,
+            "min_clips": 7,
+            "max_clips": 12,
+        })
+        clips_raw = clips_dict.get("clips_raw", "").strip()
+        out.append("```markdown")
+        out.append(clips_raw or "⚠️ No se pudieron generar clips.")
+        out.append("```")
+
+        # ==========================
+        # TITLE LAB
+        # ==========================
+        out.append("\n### 🏷️ Títulos sugeridos (AUREN_TITLE_LAB)\n")
+        titles_dict = run_title_lab({
+            "clip_text": script_v2,
+            "platform": platform,
+        })
+        titles_raw = titles_dict.get("titles_raw", "").strip()
+        out.append("```markdown")
+        out.append(titles_raw or "⚠️ No se generaron títulos.")
+        out.append("```")
+
+        # ==========================
+        # PLATFORM TRANSLATOR
+        # ==========================
+        out.append("\n### 🌍 Adaptación por plataforma (AUREN_PLATFORM_TRANSLATOR)\n")
+        platform_dict = run_platform_translator({
+            "clip_text": script_v2,
+        })
+        platform_versions_raw = platform_dict.get("platform_versions_raw", "").strip()
+        out.append("```markdown")
+        out.append(platform_versions_raw or "⚠️ No se generaron versiones por plataforma.")
+        out.append("```")
+
+        # ==========================
+        # AFFILIATES: HOTMART + SaaS
+        # ==========================
+        out.append("\n### 💸 Encaje de afiliados (AUREN_HOTMART_ENGINE + AUREN_SAAS_ENGINE)\n")
+
+        hotmart_data = run_hotmart_engine({
+            "topic": topic,
+            "audience": audience,
+        })
+        hotmart_raw = hotmart_data.get("hotmart_suggestion_raw", "").strip()
+
+        saas_data = run_saas_engine({
+            "topic": topic,
+            "audience": audience,
+        })
+        saas_raw = saas_data.get("saas_suggestion_raw", "").strip()
+
+        out.append("```markdown")
+        out.append("#### Hotmart\n")
+        out.append(hotmart_raw or "⚠️ Sin sugerencia Hotmart.")
+        out.append("\n\n#### SaaS recurrente\n")
+        out.append(saas_raw or "⚠️ Sin sugerencia SaaS.")
+        out.append("```")
+
+        # ==========================
+        # MEDIA PLAN (con GUION V2)
+        # ==========================
         out.append("\n### 🎥 Plan de producción (HUB /media_plan)\n")
-        media = hub_media_plan(script, want_thumb=want_thumb, want_broll=want_broll)
+        media = hub_media_plan(script_v2, want_thumb=want_thumb, want_broll=want_broll)
         if media.get("plan"):
             out.append(media["plan"])
         if want_thumb and media.get("thumbnail_plan"):
@@ -503,7 +627,9 @@ def run_gold_pipeline(
             out.append(f"- Pexels: {len(pex_files)} vídeos")
             out.append(f"- Pixabay: {len(pix_files)} vídeos")
 
-        # QUALITY
+        # ==========================
+        # QUALITY ENGINE (sobre GUION V2)
+        # ==========================
         if run_quality:
             if "short" in platform.lower() or "tiktok" in platform.lower() or "reels" in platform.lower():
                 tipo = "Short motivacional (rápido)"
@@ -513,7 +639,7 @@ def run_gold_pipeline(
                 tipo = "Vídeo educativo"
 
             out.append(f"\n### 🧪 Análisis de calidad (QUALITY ENGINE — {tipo})\n")
-            q = hub_quality_analyze(script, tipo)
+            q = hub_quality_analyze(script_v2, tipo)
             if q.get("informe"):
                 out.append(q["informe"])
 
