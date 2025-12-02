@@ -50,6 +50,40 @@ def get_client(space_id: str) -> Client:
         os.environ["HF_TOKEN"] = HF_TOKEN
     return Client(space_id)
 
+# ============================================================
+# WRAPPER para AUREN-CREATIVE-ENGINE (Space remoto)
+# ============================================================
+
+def run_creative_engine(params: dict) -> str:
+    """
+    Wrapper que llama al Space AUREN-CREATIVE-ENGINE
+    y se asegura de que SIEMPRE haya un 'audience' válido.
+    """
+    audience = params.get(
+        "audience",
+        "jóvenes 18-30 años de España que quieren dinero y libertad usando IA y negocios online"
+    )
+
+    payload = {
+        "topic": params["topic"],
+        "emotion": params["emotion"],
+        "platform": params["platform"],
+        "audience": audience,
+    }
+
+    client = get_client(CREATIVE_SPACE_ID)
+
+    # IMPORTANTE: aquí pasamos los 4 argumentos que espera el Space
+    result = client.predict(
+        payload["topic"],
+        payload["emotion"],
+        payload["platform"],
+        payload["audience"],
+    )
+
+    if isinstance(result, str):
+        return result
+    return str(result)
 
 # ============================================================
 # 1) MIND ENGINE — descubrir topics a partir de un NICHO
@@ -251,26 +285,26 @@ def hub_quality_analyze(script: str, tipo: str) -> Dict[str, Any]:
 # 5) CREATIVE ENGINE — guion V1 (Space + fallback local)
 # ============================================================
 
-def creative_generate_script(topic: str, emotion: str, platform: str) -> str:
+def creative_generate_script(topic: str, emotion: str, platform: str, audience: str | None = None) -> str:
     """
     Intenta llamar al Space AUREN-CREATIVE-ENGINE.
-    Si falla (404, privado, token, etc.), NO revienta el pipeline:
-    devuelve un guion completo generado por fallback local.
-
-    Ahora se usa como GUION V1, que luego pasa por SCRIPT_DOCTOR.
+    Si falla, usa fallback local.
     """
+
+    # fallback de audiencia si viene vacía
+    if not audience or audience.strip() == "":
+        audience = "jóvenes 18-30 años de España que quieren dinero y libertad usando IA y negocios online"
+
     # 1) Intento normal: Space remoto
     if CREATIVE_SPACE_ID:
         try:
-            client = get_client(CREATIVE_SPACE_ID)
-            result = client.predict(
-                topic,     # idea
-                emotion,   # emotion dropdown
-                platform,  # platform dropdown
-            )
-            if isinstance(result, str):
-                return result
-            return str(result)
+            result = run_creative_engine({
+                "topic": topic,
+                "emotion": emotion,
+                "platform": platform,
+                "audience": audience,
+            })
+            return result
 
         except Exception as e:
             # Log técnico solo en consola, no en el guion
@@ -510,7 +544,13 @@ def run_gold_pipeline(
         # ==========================
         out.append("### 🧠 Guion V1 generado (AUREN-CREATIVE-ENGINE)\n")
         topic_with_angles = f"{topic}\n\nÁngulos sugeridos:\n{angles_text}" if angles_text else topic
-        script_v1 = creative_generate_script(topic_with_angles, emotion, platform)
+script_v1 = creative_generate_script(
+    topic_with_angles,
+    emotion,
+    platform,
+    audience=audience,
+)
+
         out.append("```markdown")
         out.append(script_v1)
         out.append("```")
