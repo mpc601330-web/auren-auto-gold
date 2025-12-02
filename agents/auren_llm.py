@@ -40,7 +40,7 @@ def _chat_with_messages(
 
 
 def chat_completion(
-    system_or_messages: Union[str, List[Dict[str, str]]],
+    system_prompt: Union[str, List[Dict[str, str]]],
     user_prompt: str | None = None,
     model: str | None = None,
     temperature: float = 0.7,
@@ -52,17 +52,17 @@ def chat_completion(
     Se puede llamar de dos formas:
 
     1) chat_completion(system_prompt, user_prompt)
-    2) chat_completion(messages=[{"role": "...", "content": "..."}])
+    2) chat_completion(system_prompt=[{"role": "...", "content": "..."}])
 
-    Internamente siempre construimos una lista de messages para Groq.
+    - Si `system_prompt` es una lista, se asume que ya son messages.
+    - Si es un string, se usa como system y se combina con `user_prompt`.
     """
-    # Caso 2: ya nos pasan messages
-    if isinstance(system_or_messages, list):
-        messages = system_or_messages
+    # Caso 2: ya nos pasan messages (lista de dicts)
+    if isinstance(system_prompt, list):
+        messages = system_prompt
 
     else:
-        # Caso 1: system_prompt + user_prompt
-        system_prompt = system_or_messages
+        # Caso 1: system_prompt (str) + user_prompt
         messages: List[Dict[str, str]] = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
@@ -75,3 +75,4 @@ def chat_completion(
         temperature=temperature,
         max_tokens=max_tokens,
     )
+
