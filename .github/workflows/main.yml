@@ -8,17 +8,16 @@ on:
 jobs:
   run-auren-gold:
     runs-on: ubuntu-latest
-env:
-  HF_TOKEN: ${{ secrets.HF_TOKEN }}
-  GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-  GROQ_MODEL: "llama-3.3-70b-versatile"
-  AUREN_HUB_SPACE_ID: "Mariapc601/AUREN-API-HUB"
-  AUREN_CREATIVE_SPACE_ID: "Mariapc601/AUREN-CREATIVE-ENGINE"
-  AUREN_RENDER_URL: ${{ secrets.AUREN_RENDER_URL }}
-  PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
-  PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
 
-
+    env:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      GROQ_MODEL: "llama-3.3-70b-versatile"
+      AUREN_HUB_SPACE_ID: "Mariapc601/AUREN-API-HUB"
+      AUREN_CREATIVE_SPACE_ID: "Mariapc601/AUREN-CREATIVE-ENGINE"
+      PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+      PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
+      AUREN_RENDER_URL: ${{ secrets.AUREN_RENDER_URL }}   # 👈 AÑADIR ESTA LÍNEA
 
     steps:
       - name: Checkout repo
@@ -37,4 +36,5 @@ env:
       - name: Run AUREN AUTO GOLD script
         run: |
           python auto_gold.py
+
 
