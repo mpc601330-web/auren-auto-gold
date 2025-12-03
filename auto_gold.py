@@ -16,6 +16,9 @@ from typing import List, Dict, Any
 
 from gradio_client import Client
 import requests  # 👈 para Pexels / Pixabay
+from agents.topic_scout import discover_hot_seeds
+from agents.channel_router import pick_next_job
+from topic_memory import mark_used
 
 # ==============================
 # IMPORT: AUREN AGENTS (carpeta /agents)
@@ -773,10 +776,31 @@ def run_gold_pipeline(
     return "\n".join(out)
 
 def main():
-    # CONFIG RÁPIDA DEL RUN
-    niche = "dinero y libertad"
-    country_code = "ES"
-    lang_topics = "es"
+    # =====================================================
+    # 1) AUREN TOPIC SCOUT  → semillas de contenido
+    # =====================================================
+    seeds = discover_hot_seeds()
+    job = pick_next_job(seeds)
+
+    if not job:
+        print("⚠️ No hay temas nuevos disponibles (todas las semillas ya se usaron).")
+        return
+
+    channel = job["channel"]
+    seed = job["seed"]
+    topic_slug = job["topic_slug"]
+
+    print("🧠 Canal seleccionado:", channel["name"])
+    print("🌱 Semilla seleccionada:", seed.keyword)
+    print("🪪 Topic slug:", topic_slug)
+
+    # =====================================================
+    # 2) Config derivada de la semilla + canal
+    #    (lo que antes estaba hardcodeado)
+    # =====================================================
+    niche = seed.keyword            # ahora MIND usa la semilla, no "dinero y libertad" fijo
+    country_code = channel["country"]
+    lang_topics = channel["language"]
 
     emotion = "Motivador"
     platform = "YouTube Shorts"
@@ -785,6 +809,9 @@ def main():
     run_quality = True
     top_n = 1  # cuántos TOP quieres procesar a fondo
 
+    # =====================================================
+    # 3) Ejecutar pipeline GOLD normal
+    # =====================================================
     markdown = run_gold_pipeline(
         niche=niche,
         country_code=country_code,
@@ -798,6 +825,9 @@ def main():
     )
 
     print(markdown)
+
+    # Marcar esta semilla como usada para este canal
+    mark_used(channel["id"], topic_slug)
 
     # ==========================
     #  GUARDADO AUTOMÁTICO /outputs
@@ -839,3 +869,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
