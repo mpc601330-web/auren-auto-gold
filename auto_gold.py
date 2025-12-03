@@ -31,6 +31,18 @@ from agents.title_lab import run_agent as run_title_lab
 from agents.platform_translator import run_agent as run_platform_translator
 from agents.hotmart_engine import run_agent as run_hotmart_engine
 from agents.saas_engine import run_agent as run_saas_engine
+from agents.hook_engine import run_agent as run_hook_engine
+from agents.novelty_detector import run_agent as run_novelty_detector
+from agents.opportunity_scorer import run_agent as run_opportunity_scorer
+from agents.content_gap_hunter import run_agent as run_content_gap_hunter
+from agents.hashtag_engine import run_agent as run_hashtag_engine
+from agents.description_engine import run_agent as run_description_engine
+from agents.upload_scheduler import run_agent as run_upload_scheduler
+from agents.retention_analyzer import run_agent as run_retention_analyzer
+from agents.ctr_forecaster import run_agent as run_ctr_forecaster
+from agents.content_performance import run_agent as run_content_performance
+from agents.dashboard_engine import run_agent as run_dashboard_engine
+
 
 # ==============================
 # CONFIG: IDs de tus Spaces
@@ -503,6 +515,10 @@ def send_to_render_server(
 # 8) PIPELINE GOLD COMPLETO (ya con AGENTES AUREN)
 # ============================================================
 
+# ============================================================
+# 8) PIPELINE GOLD COMPLETO (ya con AGENTES AUREN)
+# ============================================================
+
 def run_gold_pipeline(
     niche: str,
     country_code: str = "ES",
@@ -519,17 +535,21 @@ def run_gold_pipeline(
     2) EMPIRE: calcula money_score para cada topic (HUB /topic_money_flow).
     3) Ordena descendente por money_score.
     4) Para los TOP N:
-       - Genera ángulos (AUREN_ANGLE_MASTER).
+       - Genera ángulos (AUREN_ANGLE_MASTER + HOOK_ENGINE).
        - Llama a CREATIVE (guion V1).
        - Refinado (AUREN_SCRIPT_DOCTOR → guion V2).
+       - Analiza retención (RETENTION_ANALYZER).
        - Crea clips (AUREN_CLIP_SPLITTER).
        - Títulos (AUREN_TITLE_LAB).
        - Traducción por plataforma (AUREN_PLATFORM_TRANSLATOR).
+       - Descripción + hashtags (DESCRIPTION_ENGINE + HASHTAG_ENGINE).
        - Hotmart + SaaS (AUREN_HOTMART_ENGINE + AUREN_SAAS_ENGINE).
        - Llama a HUB /media_plan (miniatura + B-roll) con guion V2.
+       - Predicción de CTR (CTR_FORECASTER).
        - Llama a HUB /quality_analyze (QA) con guion V2.
        - Descarga clips de apoyo (Pexels / Pixabay).
-    Devuelve un markdown grande con todo.
+       - Plan de publicación (UPLOAD_SCHEDULER).
+    Devuelve un markdown grande con todo + dashboard final.
     """
 
     # 1) MIND — descubrir topics
@@ -545,13 +565,15 @@ def run_gold_pipeline(
     fused = []
     for topic, row in zip(topics, money_rows):
         ms = float(row.get("money_score", 0.0) or 0.0)
-        fused.append({
-            "topic": topic,
-            "views_30d": int(row.get("views_30d", 0) or 0),
-            "intent": float(row.get("intent", 0.0) or 0.0),
-            "ads_density": float(row.get("ads_density", 0.0) or 0.0),
-            "money_score": ms,
-        })
+        fused.append(
+            {
+                "topic": topic,
+                "views_30d": int(row.get("views_30d", 0) or 0),
+                "intent": float(row.get("intent", 0.0) or 0.0),
+                "ads_density": float(row.get("ads_density", 0.0) or 0.0),
+                "money_score": ms,
+            }
+        )
 
     fused.sort(key=lambda x: x["money_score"], reverse=True)
     top_n = max(1, min(top_n, len(fused)))
@@ -565,15 +587,57 @@ def run_gold_pipeline(
         "- MIND ENGINE (topics calientes)\n"
         "- EMPIRE SCALER (money_score vía HUB)\n"
         "- CREATIVE ENGINE (guion V1)\n"
-        "- AUREN AGENTS (guion V2, clips, títulos, afiliados)\n"
+        "- AUREN AGENTS (guion V2, hooks, clips, títulos, afiliados)\n"
         "- MEDIA FACTORY (miniatura + B-roll vía HUB)\n"
         "- QUALITY ENGINE (QA vía HUB)\n"
+        "- RENDER SERVER (cola lógica de vídeo)\n"
     )
 
     # Bloque MIND
     out.append("\n## 🧠 MIND ENGINE — Discover hot topics\n")
     out.append("```markdown")
     out.append(mind["markdown"])
+    out.append("```")
+
+    # =========================================
+    # EXTRA MIND: NOVELTY + OPORTUNIDADES + GAPS
+    # =========================================
+    topics_list_markdown = "\n".join(f"- {t}" for t in topics)
+
+    out.append("\n### 🧠 Extra MIND — análisis de novedad y oportunidades\n")
+
+    # NOVELTY DETECTOR
+    novelty_data = run_novelty_detector(
+        {
+            "topics_raw": topics_list_markdown,
+        }
+    )
+    novelty_raw = novelty_data.get("novelty_report_raw", "").strip()
+
+    # OPPORTUNITY SCORER
+    opportunity_data = run_opportunity_scorer(
+        {
+            "topics_raw": topics_list_markdown,
+        }
+    )
+    opportunity_raw = opportunity_data.get("opportunity_table_raw", "").strip()
+
+    # CONTENT GAP HUNTER
+    gap_data = run_content_gap_hunter(
+        {
+            "niche": niche,
+            "competitor_notes": "Competencia típica de YouTube/TikTok en este nicho.",
+        }
+    )
+    gaps_raw = gap_data.get("gaps_raw", "").strip()
+
+    out.append("```markdown")
+    out.append("#### NOVEDAD Y SATURACIÓN\n")
+    out.append(novelty_raw or "⚠️ No se pudo generar análisis de novedad.")
+    out.append("\n\n#### OPORTUNIDADES POR TEMA\n")
+    out.append(opportunity_raw or "⚠️ No se pudo generar tabla de oportunidades.")
+    out.append("\n\n#### GAPS DE CONTENIDO\n")
+    out.append(gaps_raw or "⚠️ No se detectaron gaps específicos.")
     out.append("```")
 
     # Tabla ranking EMPIRE
@@ -602,23 +666,44 @@ def run_gold_pipeline(
         # AUREN_ANGLE_MASTER
         # ==========================
         out.append("### 🎯 Ángulos generados (AUREN_ANGLE_MASTER)\n")
-        angles_data = run_angle_master({
-            "topic": topic,
-            "audience": audience,
-            "emotion": emotion,
-            "platform": platform,
-            "num_angles": 12,
-        })
+        angles_data = run_angle_master(
+            {
+                "topic": topic,
+                "audience": audience,
+                "emotion": emotion,
+                "platform": platform,
+                "num_angles": 12,
+            }
+        )
         angles_text = angles_data.get("angles_raw", "").strip()
         out.append("```markdown")
         out.append(angles_text or "⚠️ No se generaron ángulos.")
         out.append("```")
 
         # ==========================
+        # HOOK ENGINE — hooks extra
+        # ==========================
+        out.append("\n### ⚡ Hooks extra (AUREN_HOOK_ENGINE)\n")
+        hook_data = run_hook_engine(
+            {
+                "topic": topic,
+                "audience": audience,
+                "emotion": emotion,
+                "platform": platform,
+            }
+        )
+        hooks_raw = hook_data.get("hooks_raw", "").strip()
+        out.append("```markdown")
+        out.append(hooks_raw or "⚠️ No se pudieron generar hooks adicionales.")
+        out.append("```")
+
+        # ==========================
         # CREATIVE ENGINE — GUION V1
         # ==========================
-        out.append("### 🧠 Guion V1 generado (AUREN-CREATIVE-ENGINE)\n")
-        topic_with_angles = f"{topic}\n\nÁngulos sugeridos:\n{angles_text}" if angles_text else topic
+        out.append("\n### 🧠 Guion V1 generado (AUREN-CREATIVE-ENGINE)\n")
+        topic_with_angles = (
+            f"{topic}\n\nÁngulos sugeridos:\n{angles_text}" if angles_text else topic
+        )
         script_v1 = creative_generate_script(
             topic_with_angles,
             emotion,
@@ -634,27 +719,45 @@ def run_gold_pipeline(
         # SCRIPT DOCTOR — GUION V2
         # ==========================
         out.append("\n### ✍️ Guion V2 refinado (AUREN_SCRIPT_DOCTOR)\n")
-        script_v2_dict = run_script_doctor({
-            "script_v1": script_v1,
-            "emotion": emotion,
-            "platform": platform,
-            "audience": audience,
-            "style_notes": "Tono profesional, cercano, elegante, energía Pendragon.",
-        })
+        script_v2_dict = run_script_doctor(
+            {
+                "script_v1": script_v1,
+                "emotion": emotion,
+                "platform": platform,
+                "audience": audience,
+                "style_notes": "Tono profesional, cercano, elegante, energía Pendragon.",
+            }
+        )
         script_v2 = script_v2_dict.get("script_v2", script_v1)
         out.append("```markdown")
         out.append(script_v2)
         out.append("```")
 
         # ==========================
+        # RETENTION ANALYZER
+        # ==========================
+        out.append("\n### 📈 Retención estimada (AUREN_RETENTION_ANALYZER)\n")
+        retention_data = run_retention_analyzer(
+            {
+                "script_v2": script_v2,
+            }
+        )
+        retention_raw = retention_data.get("retention_report_raw", "").strip()
+        out.append("```markdown")
+        out.append(retention_raw or "⚠️ No se generó informe de retención.")
+        out.append("```")
+
+        # ==========================
         # CLIP SPLITTER — CLIPS
         # ==========================
         out.append("\n### 🎬 Clips generados (AUREN_CLIP_SPLITTER)\n")
-        clips_dict = run_clip_splitter({
-            "script_v2": script_v2,
-            "min_clips": 7,
-            "max_clips": 12,
-        })
+        clips_dict = run_clip_splitter(
+            {
+                "script_v2": script_v2,
+                "min_clips": 7,
+                "max_clips": 12,
+            }
+        )
         clips_raw = clips_dict.get("clips_raw", "").strip()
         out.append("```markdown")
         out.append(clips_raw or "⚠️ No se pudieron generar clips.")
@@ -664,10 +767,12 @@ def run_gold_pipeline(
         # TITLE LAB
         # ==========================
         out.append("\n### 🏷️ Títulos sugeridos (AUREN_TITLE_LAB)\n")
-        titles_dict = run_title_lab({
-            "clip_text": script_v2,
-            "platform": platform,
-        })
+        titles_dict = run_title_lab(
+            {
+                "clip_text": script_v2,
+                "platform": platform,
+            }
+        )
         titles_raw = titles_dict.get("titles_raw", "").strip()
         out.append("```markdown")
         out.append(titles_raw or "⚠️ No se generaron títulos.")
@@ -677,29 +782,72 @@ def run_gold_pipeline(
         # PLATFORM TRANSLATOR
         # ==========================
         out.append("\n### 🌍 Adaptación por plataforma (AUREN_PLATFORM_TRANSLATOR)\n")
-        platform_dict = run_platform_translator({
-            "clip_text": script_v2,
-        })
+        platform_dict = run_platform_translator(
+            {
+                "clip_text": script_v2,
+            }
+        )
         platform_versions_raw = platform_dict.get("platform_versions_raw", "").strip()
         out.append("```markdown")
-        out.append(platform_versions_raw or "⚠️ No se generaron versiones por plataforma.")
+        out.append(
+            platform_versions_raw
+            or "⚠️ No se generaron versiones por plataforma."
+        )
+        out.append("```")
+
+        # ==========================
+        # DESCRIPTION ENGINE + HASHTAG ENGINE
+        # ==========================
+        out.append(
+            "\n### 📝 Descripción y hashtags (AUREN_DESCRIPTION_ENGINE + AUREN_HASHTAG_ENGINE)\n"
+        )
+
+        desc_data = run_description_engine(
+            {
+                "script_v2": script_v2,
+                "topic": topic,
+                "niche": niche,
+            }
+        )
+        description_raw = desc_data.get("description_raw", "").strip()
+
+        hashtag_data = run_hashtag_engine(
+            {
+                "topic": topic,
+                "niche": niche,
+                "language": lang_topics,
+            }
+        )
+        hashtags_raw = hashtag_data.get("hashtags_raw", "").strip()
+
+        out.append("```markdown")
+        out.append("#### Descripción sugerida\n")
+        out.append(description_raw or "⚠️ No se generó descripción.")
+        out.append("\n\n#### Hashtags sugeridos\n")
+        out.append(hashtags_raw or "⚠️ No se generaron hashtags.")
         out.append("```")
 
         # ==========================
         # AFFILIATES: HOTMART + SaaS
         # ==========================
-        out.append("\n### 💸 Encaje de afiliados (AUREN_HOTMART_ENGINE + AUREN_SAAS_ENGINE)\n")
+        out.append(
+            "\n### 💸 Encaje de afiliados (AUREN_HOTMART_ENGINE + AUREN_SAAS_ENGINE)\n"
+        )
 
-        hotmart_data = run_hotmart_engine({
-            "topic": topic,
-            "audience": audience,
-        })
+        hotmart_data = run_hotmart_engine(
+            {
+                "topic": topic,
+                "audience": audience,
+            }
+        )
         hotmart_raw = hotmart_data.get("hotmart_suggestion_raw", "").strip()
 
-        saas_data = run_saas_engine({
-            "topic": topic,
-            "audience": audience,
-        })
+        saas_data = run_saas_engine(
+            {
+                "topic": topic,
+                "audience": audience,
+            }
+        )
         saas_raw = saas_data.get("saas_suggestion_raw", "").strip()
 
         out.append("```markdown")
@@ -743,10 +891,59 @@ def run_gold_pipeline(
             out.append(f"- Pixabay: {len(pix_files)} vídeos")
 
         # ==========================
+        # CTR FORECASTER (título + miniatura)
+        # ==========================
+        out.append("\n### 🎯 Predicción de CTR (AUREN_CTR_FORECASTER)\n")
+
+        first_title = ""
+        if titles_raw:
+            for line in titles_raw.splitlines():
+                line = line.strip()
+                if line and not line.startswith(("#", "-", "*")):
+                    first_title = line
+                    break
+
+        thumb_brief_text = media.get("thumbnail_plan") or media.get("plan") or ""
+
+        ctr_data = run_ctr_forecaster(
+            {
+                "title": first_title,
+                "thumbnail_brief": thumb_brief_text,
+            }
+        )
+        ctr_raw = ctr_data.get("ctr_forecast_raw", "").strip()
+
+        out.append("```markdown")
+        out.append(ctr_raw or "⚠️ No se pudo estimar el CTR.")
+        out.append("```")
+
+        # ==========================
+        # UPLOAD SCHEDULER
+        # ==========================
+        out.append(
+            "\n### 🗓 Plan de publicación recomendado (AUREN_UPLOAD_SCHEDULER)\n"
+        )
+        upload_plan = run_upload_scheduler(
+            {
+                "audience": audience,
+                "timezone": "Europe/Madrid",
+            }
+        )
+        upload_raw = upload_plan.get("upload_plan_raw", "").strip()
+
+        out.append("```markdown")
+        out.append(upload_raw or "⚠️ No se generó plan de publicación.")
+        out.append("```")
+
+        # ==========================
         # QUALITY ENGINE (sobre GUION V2)
         # ==========================
         if run_quality:
-            if "short" in platform.lower() or "tiktok" in platform.lower() or "reels" in platform.lower():
+            if (
+                "short" in platform.lower()
+                or "tiktok" in platform.lower()
+                or "reels" in platform.lower()
+            ):
                 tipo = "Short motivacional (rápido)"
             elif "long" in platform.lower():
                 tipo = "Vídeo largo storytelling"
@@ -773,7 +970,25 @@ def run_gold_pipeline(
         out.append(json.dumps(render_res, ensure_ascii=False, indent=2))
         out.append("```")
 
+    # ==========================
+    # DASHBOARD ENGINE — resumen ejecutivo del run
+    # ==========================
+    dashboard_input = "\n".join(out[-400:])  # último tramo del markdown
+    dashboard_data = run_dashboard_engine(
+        {
+            "inputs_raw": dashboard_input,
+        }
+    )
+    dashboard_raw = dashboard_data.get("dashboard_summary_raw", "").strip()
+
+    out.append("\n---\n")
+    out.append("## 📊 Resumen ejecutivo (AUREN_DASHBOARD_ENGINE)\n")
+    out.append("```markdown")
+    out.append(dashboard_raw or "⚠️ No se generó resumen ejecutivo.")
+    out.append("```")
+
     return "\n".join(out)
+
 
 def main():
     # =====================================================
@@ -869,4 +1084,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
