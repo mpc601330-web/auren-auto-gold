@@ -758,7 +758,20 @@ def run_gold_pipeline(
 
     return "\n".join(out)
 
-
+        # ==========================
+        # RENDER SERVER — Encolar vídeo
+        # ==========================
+        out.append("\n### 🧩 Render job (AUREN RENDER SERVER)\n")
+        render_res = send_to_render_server(
+            template_id="motivacional_v1",
+            script_v2=script_v2,
+            platform=platform,
+            language=lang_topics,
+            audience=audience,
+        )
+        out.append("```json")
+        out.append(json.dumps(render_res, ensure_ascii=False, indent=2))
+        out.append("```")
 def main():
     # CONFIG RÁPIDA DEL RUN
     niche = "dinero y libertad"
@@ -785,20 +798,6 @@ def main():
     )
 
     print(markdown)
-        # ==========================
-        # RENDER SERVER — Encolar vídeo
-        # ==========================
-        out.append("\n### 🧩 Render job (AUREN RENDER SERVER)\n")
-        render_res = send_to_render_server(
-            template_id="motivacional_v1",
-            script_v2=script_v2,
-            platform=platform,
-            language=lang_topics,
-            audience=audience,
-        )
-        out.append("```json")
-        out.append(json.dumps(render_res, ensure_ascii=False, indent=2))
-        out.append("```")
 
     # ==========================
     #  GUARDADO AUTOMÁTICO /outputs
@@ -840,4 +839,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
