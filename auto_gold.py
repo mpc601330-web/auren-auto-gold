@@ -35,6 +35,11 @@ from agents.saas_engine import run_agent as run_saas_engine
 
 HUB_SPACE_ID = os.getenv("AUREN_HUB_SPACE_ID", "Mariapc601/AUREN-API-HUB").strip()
 CREATIVE_SPACE_ID = os.getenv("AUREN_CREATIVE_SPACE_ID", "Mariapc601/AUREN-CREATIVE-ENGINE").strip()
+# Render Server (cola de vídeo)
+RENDER_URL = os.getenv(
+    "AUREN_RENDER_URL",
+    "https://mariapc601-auren-render-server.hf.space/render_video",  # por defecto tu Space
+).strip()
 
 # Si tus Spaces son privados, usamos HF_TOKEN del entorno.
 HF_TOKEN = os.getenv("HF_TOKEN", "").strip()
@@ -423,9 +428,76 @@ def pixabay_search_and_download(keywords: list[str], target_folder: str, max_vid
 
     return saved_files
 
+# ============================================================
+# 7) RENDER SERVER — Encola el vídeo en el Space de render
+# ============================================================
+
+def send_to_render_server(
+    template_id: str,
+    script_v2: str,
+    platform: str,
+    language: str = "es",
+    audience: str | None = None,
+) -> Dict[str, Any]:
+    """
+    Envía un job sencillo al AUREN RENDER SERVER.
+    Ahora mismo solo encola el trabajo (no monta todavía el vídeo real).
+    """
+
+    if not RENDER_URL:
+        return {
+            "status": "disabled",
+            "message": "AUREN_RENDER_URL no está configurado en el entorno.",
+        }
+
+    plat = (platform or "").lower()
+    if any(x in plat for x in ["short", "tiktok", "reel", "vertical"]):
+        aspect_ratio = "9:16"
+        resolution = "1080x1920"
+    else:
+        aspect_ratio = "16:9"
+        resolution = "1920x1080"
+
+    # De momento enviamos una única escena 'talking_head' con todo el guion.
+    scenes = [
+        {
+            "type": "talking_head",
+            "duration": 60.0,  # dummy, ya lo ajustaremos
+            "text": script_v2[:4000],
+        }
+    ]
+
+    payload = {
+        "template_id": template_id,
+        "aspect_ratio": aspect_ratio,
+        "resolution": resolution,
+        "fps": 30,
+        "language": language,
+        "voice_profile": "auren_default_female",
+        "audience": audience,
+        "platform": platform,
+        "scenes": scenes,
+        "music": {
+            "mood": "motivational",
+            "intensity": "medium",
+        },
+    }
+
+    try:
+        r = requests.post(RENDER_URL, json=payload, timeout=20)
+        r.raise_for_status()
+        data = r.json()
+        data.setdefault("render_url", RENDER_URL)
+        return data
+    except Exception as e:
+        return {
+            "status": "error",
+            "render_url": RENDER_URL,
+            "error": str(e),
+        }
 
 # ============================================================
-# 7) PIPELINE GOLD COMPLETO (ya con AGENTES AUREN)
+# 8) PIPELINE GOLD COMPLETO (ya con AGENTES AUREN)
 # ============================================================
 
 def run_gold_pipeline(
@@ -542,14 +614,15 @@ def run_gold_pipeline(
         # ==========================
         # CREATIVE ENGINE — GUION V1
         # ==========================
+
         out.append("### 🧠 Guion V1 generado (AUREN-CREATIVE-ENGINE)\n")
         topic_with_angles = f"{topic}\n\nÁngulos sugeridos:\n{angles_text}" if angles_text else topic
-script_v1 = creative_generate_script(
-    topic_with_angles,
-    emotion,
-    platform,
-    audience=audience,
-)
+        script_v1 = creative_generate_script(
+            topic_with_angles,
+            emotion,
+            platform,
+            audience=audience,
+        )
 
         out.append("```markdown")
         out.append(script_v1)
@@ -712,6 +785,20 @@ def main():
     )
 
     print(markdown)
+        # ==========================
+        # RENDER SERVER — Encolar vídeo
+        # ==========================
+        out.append("\n### 🧩 Render job (AUREN RENDER SERVER)\n")
+        render_res = send_to_render_server(
+            template_id="motivacional_v1",
+            script_v2=script_v2,
+            platform=platform,
+            language=lang_topics,
+            audience=audience,
+        )
+        out.append("```json")
+        out.append(json.dumps(render_res, ensure_ascii=False, indent=2))
+        out.append("```")
 
     # ==========================
     #  GUARDADO AUTOMÁTICO /outputs
