@@ -1,20 +1,22 @@
 # agents/topic_scout.py
 from dataclasses import dataclass
+from typing import List
+
 
 @dataclass
 class TopicSeed:
-    keyword: str
-    niche: str
+    keyword: str   # frase semilla
+    niche: str     # nicho general
     country: str
     language: str
-    source: str
+    source: str    # "manual", "yt_trends", etc.
 
-def discover_hot_seeds() -> list[TopicSeed]:
-    """
-    V1: Semillas estáticas. Luego se puede conectar a API reales.
-    """
 
-    seeds = [
+def discover_hot_seeds() -> List[TopicSeed]:
+    """
+    V1: semillas fijas. Luego se sustituye por APIs reales (YouTube, Trends, etc.).
+    """
+    return [
         TopicSeed("cómo empezar a invertir", "dinero y libertad", "ES", "es", "manual"),
         TopicSeed("negocios automáticos con IA", "dinero y libertad", "ES", "es", "manual"),
         TopicSeed("máquinas de vending como negocio", "dinero y libertad", "ES", "es", "manual"),
@@ -22,5 +24,3 @@ def discover_hot_seeds() -> list[TopicSeed]:
         TopicSeed("cómo crear ingresos pasivos reales", "dinero y libertad", "ES", "es", "manual"),
         TopicSeed("ahorrar y gestionar dinero con 18 años", "dinero y libertad", "ES", "es", "manual"),
     ]
-
-    return seeds
