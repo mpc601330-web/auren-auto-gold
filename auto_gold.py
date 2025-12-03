@@ -614,7 +614,6 @@ def run_gold_pipeline(
         # ==========================
         # CREATIVE ENGINE — GUION V1
         # ==========================
-
         out.append("### 🧠 Guion V1 generado (AUREN-CREATIVE-ENGINE)\n")
         topic_with_angles = f"{topic}\n\nÁngulos sugeridos:\n{angles_text}" if angles_text else topic
         script_v1 = creative_generate_script(
@@ -756,8 +755,6 @@ def run_gold_pipeline(
             if q.get("informe"):
                 out.append(q["informe"])
 
-    return "\n".join(out)
-
         # ==========================
         # RENDER SERVER — Encolar vídeo
         # ==========================
@@ -772,6 +769,9 @@ def run_gold_pipeline(
         out.append("```json")
         out.append(json.dumps(render_res, ensure_ascii=False, indent=2))
         out.append("```")
+
+    return "\n".join(out)
+
 def main():
     # CONFIG RÁPIDA DEL RUN
     niche = "dinero y libertad"
