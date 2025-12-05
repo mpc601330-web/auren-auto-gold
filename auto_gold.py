@@ -25,24 +25,40 @@ from auren_brain_adapter import load_brain_plan, pick_video_from_brain
 # IMPORT: AUREN AGENTS (carpeta /agents)
 # ==============================
 
+# ==============================
+# IMPORT: AUREN AGENTS (carpeta /agents)
+# ==============================
+
+# ------------- FÁBRICA (CREATIVE + FINAL) -------------
 from agents.angle_master import run_agent as run_angle_master
 from agents.script_doctor import run_agent as run_script_doctor
 from agents.clip_splitter import run_agent as run_clip_splitter
 from agents.title_lab import run_agent as run_title_lab
 from agents.platform_translator import run_agent as run_platform_translator
+
+# ------------- MONEY / AFILIADOS -------------
 from agents.hotmart_engine import run_agent as run_hotmart_engine
 from agents.saas_engine import run_agent as run_saas_engine
+
+# ------------- CRECIMIENTO Y OPTIMIZACIÓN -------------
 from agents.hook_engine import run_agent as run_hook_engine
 from agents.novelty_detector import run_agent as run_novelty_detector
 from agents.opportunity_scorer import run_agent as run_opportunity_scorer
 from agents.content_gap_hunter import run_agent as run_content_gap_hunter
 from agents.hashtag_engine import run_agent as run_hashtag_engine
 from agents.description_engine import run_agent as run_description_engine
+
 from agents.upload_scheduler import run_agent as run_upload_scheduler
 from agents.retention_analyzer import run_agent as run_retention_analyzer
 from agents.ctr_forecaster import run_agent as run_ctr_forecaster
 from agents.content_performance import run_agent as run_content_performance
+
+# ------------- DASHBOARD -------------
 from agents.dashboard_engine import run_agent as run_dashboard_engine
+
+# ------------- **BRAIN (NUEVOS)** -------------
+from agents.trend_oracle import run_agent as run_trend_oracle
+from agents.channel_evaluator import run_agent as run_channel_evaluator
 
 # ==============================
 # MAPEOS DESDE AUREN BRAIN
