@@ -19,6 +19,7 @@ import requests  # 👈 para Pexels / Pixabay
 from agents.topic_scout import discover_hot_seeds
 from agents.channel_router import pick_next_job
 from topic_memory import mark_used
+from auren_brain_adapter import load_brain_plan, pick_video_from_brain
 
 # ==============================
 # IMPORT: AUREN AGENTS (carpeta /agents)
@@ -989,6 +990,28 @@ def run_gold_pipeline(
 
     return "\n".join(out)
 
+def get_seed_from_brain_or_default():
+    """
+    Si hay un plan de Brain, lo usamos.
+    Si no, usamos el sistema actual de AutoGold.
+    """
+    brain_plan_path = os.getenv("AUREN_BRAIN_PLAN_PATH", "").strip()
+
+    if brain_plan_path:
+        plan = load_brain_plan(brain_plan_path)
+        video_cfg = pick_video_from_brain(plan)
+        if video_cfg:
+            print("🧠 Usando plan de Auren Brain:")
+            print(f"   Canal: {video_cfg['channel_name']}")
+            print(f"   Topic: {video_cfg['topic']}")
+            print(f"   Video ID: {video_cfg['video_id']}")
+            return video_cfg
+
+    # 🔁 fallback: comportamiento actual que ya tienes
+    # Aquí llamas a tu lógica antigua de MIND ENGINE / selección de canal+topic.
+    # EJEMPLO (ajústalo a tu código real):
+    from agents.mind_engine import pick_random_topic  # ficticio, pon el tuyo
+    return pick_random_topic()
 
 def main():
     # =====================================================
