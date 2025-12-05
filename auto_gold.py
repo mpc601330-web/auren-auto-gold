@@ -20,7 +20,7 @@ from agents.topic_scout import discover_hot_seeds
 from agents.channel_router import pick_next_job
 from topic_memory import mark_used
 from auren_brain_adapter import load_brain_plan, pick_video_from_brain
-
+from vault.vault_media import load_vault, suggest_offer_for_video
 
 # ==============================
 # IMPORT: AUREN AGENTS (carpeta /agents)
@@ -583,7 +583,10 @@ def run_gold_pipeline(
     want_broll: bool = True,
     run_quality: bool = True,
     top_n: int = 1,
+    channel_name: str | None = None,
+    affiliate_slot: str | None = None,
 ) -> str:
+
     """
     1) MIND: genera lista de topics a partir de un NICHO.
     2) EMPIRE: calcula money_score para cada topic (HUB /topic_money_flow).
@@ -1085,6 +1088,10 @@ def main():
         run_quality = True
         top_n = 1
 
+        # 🔗 Datos extra para VAULT / contexto
+        channel_name = video_cfg["channel_name"]
+        affiliate_slot = video_cfg.get("affiliate_slot")
+
         markdown = run_gold_pipeline(
             niche=niche,
             country_code=country_code,
@@ -1095,6 +1102,8 @@ def main():
             want_broll=want_broll,
             run_quality=run_quality,
             top_n=top_n,
+            channel_name=channel_name,
+            affiliate_slot=affiliate_slot,
         )
 
         # Opcional: aquí podrías pasar también info del Brain al nombre del fichero
@@ -1157,6 +1166,9 @@ def main():
     run_quality = True
     top_n = 1
 
+    # 🔗 También pasamos el nombre de canal al pipeline
+    channel_name = channel["name"]
+
     markdown = run_gold_pipeline(
         niche=niche,
         country_code=country_code,
@@ -1167,6 +1179,8 @@ def main():
         want_broll=want_broll,
         run_quality=run_quality,
         top_n=top_n,
+        channel_name=channel_name,
+        affiliate_slot=None,
     )
 
     print(markdown)
@@ -1192,8 +1206,8 @@ def main():
 
     video_plan_content = (
         "# 🎬 AUREN VIDEO PLAN\n\n"
-        "## 📝 Guion + Producción\n\n"
-        f"{markdown}\n"
+            "## 📝 Guion + Producción\n\n"
+            f"{markdown}\n"
     )
 
     with open(video_plan_path, "w", encoding="utf-8") as f:
@@ -1204,5 +1218,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
