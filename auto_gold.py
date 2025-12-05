@@ -1012,7 +1012,15 @@ def run_gold_pipeline(
     # ==========================
     # DASHBOARD ENGINE — resumen ejecutivo del run
     # ==========================
-    dashboard_input = "\n".join(out[-400:])  # último tramo del markdown
+    full_markdown = "\n".join(out)
+
+    # Limitamos el tamaño para no romper el límite de tokens de Groq
+    max_chars = 6000
+    if len(full_markdown) > max_chars:
+        dashboard_input = full_markdown[-max_chars:]
+    else:
+        dashboard_input = full_markdown
+
     dashboard_data = run_dashboard_engine(
         {
             "inputs_raw": dashboard_input,
@@ -1027,6 +1035,7 @@ def run_gold_pipeline(
     out.append("```")
 
     return "\n".join(out)
+
 
 def main():
     # ¿Hay plan de Auren Brain?
