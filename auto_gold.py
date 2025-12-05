@@ -21,9 +21,6 @@ from agents.channel_router import pick_next_job
 from topic_memory import mark_used
 from auren_brain_adapter import load_brain_plan, pick_video_from_brain
 
-# ==============================
-# IMPORT: AUREN AGENTS (carpeta /agents)
-# ==============================
 
 # ==============================
 # IMPORT: AUREN AGENTS (carpeta /agents)
