@@ -1,42 +1,71 @@
 # auren_brain_adapter.py
-import json
-import os
 
-def load_brain_plan(path: str):
-    if not path or not os.path.exists(path):
-        return None
+import json
+from typing import Any, Dict, Optional, List
+
+
+def load_brain_plan(path: str) -> Dict[str, Any]:
+    """
+    Carga el JSON de Auren Brain desde disco.
+    """
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
 
-def pick_video_from_brain(plan: dict):
-    """
-    Devuelve el vídeo de mayor prioridad del plan.
-    """
-    if not plan:
-        return None
 
-    videos = plan.get("videos", [])
+def _pick_highest_priority(videos: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """
+    Devuelve el vídeo con menor 'priority' (1 = más importante).
+    Si hay empate, se queda con el primero.
+    """
     if not videos:
         return None
 
-    # elegimos el de prioridad más alta (1 mejor que 2, mejor que 3)
     videos_sorted = sorted(
         videos,
-        key=lambda v: v.get("priority", 2)
+        key=lambda v: v.get("priority", 999)
     )
-    chosen = videos_sorted[0]
+    return videos_sorted[0]
+
+
+def pick_video_from_brain(plan: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """
+    Recibe el plan completo de Brain (el JSON que me has pasado)
+    y devuelve un dict compacto que AutoGold entiende.
+
+    Estructura de salida:
+    {
+        "run_id": str,
+        "channel_name": str,
+        "channel_id": str,
+        "country": str,
+        "language": str,
+        "topic": str,
+        "video_id": str,
+        "emotion": str,
+        "target_platform": str,
+        "hook": str,
+        "angle": str,
+        "est_duration_sec": int,
+    }
+    """
+    videos = plan.get("videos", [])
+    video = _pick_highest_priority(videos)
+    if not video:
+        return None
 
     return {
-        "channel_name": plan.get("channel_name", "Canal_sin_nombre"),
-        "niche": plan.get("niche", ""),
-        "country": plan.get("country", ""),
-        "language": plan.get("language", ""),
-        "run_id": plan.get("run_id", ""),
-        "video_id": chosen.get("video_id", ""),
-        "topic": chosen.get("topic", ""),
-        "angle": chosen.get("angle", ""),
-        "emotion": chosen.get("emotion", ""),
-        "hook": chosen.get("hook", ""),
-        "platform": chosen.get("target_platform", "shorts"),
-        "affiliate_slot": chosen.get("affiliate_slot", ""),
+        "run_id": plan.get("run_id"),
+        "channel_name": plan["channel_name"],
+        # si algún día quieres IDs distintos, ya está preparado
+        "channel_id": plan.get("channel_id", plan["channel_name"]),
+        "country": plan.get("country", "ES"),
+        "language": plan.get("language", "es"),
+
+        "topic": video["topic"],
+        "video_id": video["video_id"],
+        "emotion": video.get("emotion", "Motivador"),
+        "target_platform": video.get("target_platform", "shorts"),
+        "hook": video.get("hook", ""),
+        "angle": video.get("angle", ""),
+        "est_duration_sec": int(video.get("est_duration_sec", 60)),
     }
