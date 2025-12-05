@@ -1045,13 +1045,19 @@ def run_gold_pipeline(
         # RENDER SERVER — Encolar vídeo
         # ==========================
         out.append("\n### 🧩 Render job (AUREN RENDER SERVER)\n")
+
+        # Usamos la misma carpeta de assets que hemos llenado más arriba
+        assets_folder = f"videos/assets_{topic.replace(' ', '_')}"
+
         render_res = send_to_render_server(
             template_id="motivacional_v1",
             script_v2=script_v2,
             platform=platform,
             language=lang_topics,
             audience=audience,
+            assets_folder=assets_folder,
         )
+
         out.append("```json")
         out.append(json.dumps(render_res, ensure_ascii=False, indent=2))
         out.append("```")
