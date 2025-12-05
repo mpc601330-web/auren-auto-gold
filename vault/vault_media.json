@@ -1,0 +1,37 @@
+{
+  "version": "1.0",
+  "offers": [
+    {
+      "id": "curso_inversion_principiantes",
+      "name": "Curso de Inversión para Principiantes 2025",
+      "type": "hotmart",
+      "base_url": "https://go.hotmart.com/TU-ENLACE-INVERSORES",
+      "countries": ["ES", "MX", "AR"],
+      "niches": ["dinero", "inversion", "finanzas personales"],
+      "default_slot": "curso_inversion_principiantes",
+      "tags": ["principiantes", "bolsa", "finanzas"],
+      "payout_type": "revshare",
+      "notes": "Oferta principal para vídeos de 'cómo empezar a invertir'."
+    },
+    {
+      "id": "saas_gestor_inversiones",
+      "name": "Plataforma SaaS de Gestión de Inversiones",
+      "type": "saas",
+      "base_url": "https://tusaas.com/auren-ref",
+      "countries": ["ES", "MX"],
+      "niches": ["dinero", "productividad", "inversion"],
+      "default_slot": "saas_inversion",
+      "tags": ["herramienta", "software", "suscripcion"],
+      "payout_type": "monthly_recurring",
+      "notes": "SaaS recurrente para vídeos donde se hable de herramientas."
+    }
+  ],
+  "channel_overrides": [
+    {
+      "channel_name": "Auren Dinero para Principiantes",
+      "affiliate_slot": "curso_inversion_principiantes",
+      "offer_id": "curso_inversion_principiantes",
+      "custom_url": "https://go.hotmart.com/TU-ENLACE-INVERSORES?src=auren-dinero"
+    }
+  ]
+}
