@@ -44,6 +44,44 @@ from agents.ctr_forecaster import run_agent as run_ctr_forecaster
 from agents.content_performance import run_agent as run_content_performance
 from agents.dashboard_engine import run_agent as run_dashboard_engine
 
+# ==============================
+# MAPEOS DESDE AUREN BRAIN
+# ==============================
+
+def map_emotion(brain_emotion: str) -> str:
+    """
+    Traduce las etiquetas del Brain a algo que entiendan los agentes.
+    """
+    e = (brain_emotion or "").lower()
+
+    if "miedo" in e:
+        return "Miedo (suave)"
+    if "aspiracional" in e:
+        return "Aspiracional"
+    if "calma" in e:
+        return "Calma"
+    if "rabia" in e:
+        return "Indignación controlada"
+
+    # fallback genérico
+    return "Motivador"
+
+
+def map_platform(brain_platform: str) -> str:
+    """
+    Traduce 'tiktok', 'shorts', 'reels' → nombre amigable para el pipeline.
+    """
+    p = (brain_platform or "").lower()
+
+    if "tiktok" in p:
+        return "TikTok"
+    if "short" in p:
+        return "YouTube Shorts"
+    if "reel" in p:
+        return "Instagram Reels"
+
+    # fallback: formato vertical corto por defecto
+    return "YouTube Shorts"
 
 # ==============================
 # CONFIG: IDs de tus Spaces
@@ -991,68 +1029,100 @@ def run_gold_pipeline(
     return "\n".join(out)
 
 def main():
-    # =====================================================
-    # 0) Intentar usar AUREN BRAIN primero
-    # =====================================================
+    # ¿Hay plan de Auren Brain?
     brain_plan_path = os.getenv("AUREN_BRAIN_PLAN_PATH", "").strip()
-    from_brain = False
 
     if brain_plan_path:
-        try:
-            plan = load_brain_plan(brain_plan_path)
-            video_cfg = pick_video_from_brain(plan)
-        except Exception as e:
-            print(f"⚠️ Error cargando plan de Auren Brain: {e}")
-            video_cfg = None
-    else:
-        video_cfg = None
+        # ============================
+        # 🎛️ MODO CONTROLADO POR BRAIN
+        # ============================
+        plan = load_brain_plan(brain_plan_path)
+        video_cfg = pick_video_from_brain(plan)
 
-    if video_cfg:
-        # 🔮 MODO BRAIN: el propio Brain ya ha decidido canal + topic
-        from_brain = True
-
-        channel = {
-            "id": video_cfg.get("channel_id", video_cfg["channel_name"]),
-            "name": video_cfg["channel_name"],
-            "country": video_cfg.get("country", "ES"),
-            "language": video_cfg.get("language", "es"),
-        }
-
-        seed_keyword = video_cfg["topic"]          # será el NICHO/TEMA base
-        topic_slug = video_cfg["video_id"]         # ID interno de Brain
-
-        print("🧠 AUREN BRAIN ha elegido el vídeo:")
-        print(f"   Canal: {channel['name']}")
-        print(f"   País: {channel['country']}  |  Idioma: {channel['language']}")
-        print(f"   Topic: {seed_keyword}")
-        print(f"   Video ID (Brain): {topic_slug}")
-
-    else:
-        # =====================================================
-        # 1) AUREN TOPIC SCOUT  → semillas de contenido (modo clásico)
-        # =====================================================
-        seeds = discover_hot_seeds()
-        job = pick_next_job(seeds)
-
-        if not job:
-            print("⚠️ No hay temas nuevos disponibles (todas las semillas ya se usaron).")
+        if not video_cfg:
+            print("⚠️ Auren Brain no devolvió ningún vídeo. Saliendo.")
             return
 
-        channel = job["channel"]
-        seed = job["seed"]
-        topic_slug = job["topic_slug"]
+        print("🧠 Auren Brain activo:")
+        print("   Canal:", video_cfg["channel_name"])
+        print("   Topic:", video_cfg["topic"])
+        print("   Video ID:", video_cfg["video_id"])
+        print("   Emoción:", video_cfg["emotion"])
+        print("   Plataforma:", video_cfg["target_platform"])
 
-        seed_keyword = seed.keyword
+        niche = video_cfg["topic"]
+        country_code = video_cfg["country"]
+        lang_topics = video_cfg["language"]
 
-        print("🧠 Canal seleccionado:", channel["name"])
-        print("🌱 Semilla seleccionada:", seed_keyword)
-        print("🪪 Topic slug:", topic_slug)
+        emotion = map_emotion(video_cfg["emotion"])
+        platform = map_platform(video_cfg["target_platform"])
+        want_thumb = True
+        want_broll = True
+        run_quality = True
+        top_n = 1
 
-    # =====================================================
-    # 2) Config derivada de la semilla + canal
-    #    (igual que antes, pero usando seed_keyword)
-    # =====================================================
-    niche = seed_keyword
+        markdown = run_gold_pipeline(
+            niche=niche,
+            country_code=country_code,
+            lang_topics=lang_topics,
+            emotion=emotion,
+            platform=platform,
+            want_thumb=want_thumb,
+            want_broll=want_broll,
+            run_quality=run_quality,
+            top_n=top_n,
+        )
+
+        # Opcional: aquí podrías pasar también info del Brain al nombre del fichero
+        from datetime import datetime
+        ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+
+        os.makedirs("outputs", exist_ok=True)
+        md_path = f"outputs/auren_gold_{ts}.md"
+        json_path = f"outputs/auren_gold_{ts}.json"
+
+        with open(md_path, "w", encoding="utf-8") as f:
+            f.write(markdown)
+
+        with open(json_path, "w", encoding="utf-8") as f:
+            f.write(json.dumps({"output": markdown}, ensure_ascii=False, indent=2))
+
+        print(f"\n💾 Guardado en: {md_path} y {json_path}")
+
+        os.makedirs("videos", exist_ok=True)
+        video_plan_path = f"videos/video_plan_{ts}.md"
+
+        video_plan_content = (
+            "# 🎬 AUREN VIDEO PLAN\n\n"
+            "## 📝 Guion + Producción\n\n"
+            f"{markdown}\n"
+        )
+
+        with open(video_plan_path, "w", encoding="utf-8") as f:
+            f.write(video_plan_content)
+
+        print(f"📦 Plan de vídeo guardado en: {video_plan_path}")
+        return
+
+    # ============================
+    # 🔁 MODO ANTIGUO (AutoGold solo)
+    # ============================
+    seeds = discover_hot_seeds()
+    job = pick_next_job(seeds)
+
+    if not job:
+        print("⚠️ No hay temas nuevos disponibles (todas las semillas ya se usaron).")
+        return
+
+    channel = job["channel"]
+    seed = job["seed"]
+    topic_slug = job["topic_slug"]
+
+    print("🧠 Canal seleccionado:", channel["name"])
+    print("🌱 Semilla seleccionada:", seed.keyword)
+    print("🪪 Topic slug:", topic_slug)
+
+    niche = seed.keyword
     country_code = channel["country"]
     lang_topics = channel["language"]
 
@@ -1061,11 +1131,8 @@ def main():
     want_thumb = True
     want_broll = True
     run_quality = True
-    top_n = 1  # cuántos TOP quieres procesar a fondo
+    top_n = 1
 
-    # =====================================================
-    # 3) Ejecutar pipeline GOLD normal
-    # =====================================================
     markdown = run_gold_pipeline(
         niche=niche,
         country_code=country_code,
@@ -1079,16 +1146,9 @@ def main():
     )
 
     print(markdown)
+    mark_used(channel["id"], topic_slug)
 
-    # Solo marcamos como usada la semilla si venimos del sistema antiguo
-    if not from_brain:
-        mark_used(channel["id"], topic_slug)
-
-    # ==========================
-    #  GUARDADO AUTOMÁTICO /outputs
-    # ==========================
     os.makedirs("outputs", exist_ok=True)
-
     from datetime import datetime
     ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
@@ -1103,11 +1163,7 @@ def main():
 
     print(f"\n💾 Guardado en: {md_path} y {json_path}")
 
-    # ==========================
-    #  EXPORTACIÓN /videos
-    # ==========================
     os.makedirs("videos", exist_ok=True)
-
     video_plan_path = f"videos/video_plan_{ts}.md"
 
     video_plan_content = (
@@ -1120,6 +1176,7 @@ def main():
         f.write(video_plan_content)
 
     print(f"📦 Plan de vídeo guardado en: {video_plan_path}")
+
 
 if __name__ == "__main__":
     main()
