@@ -1,0 +1,40 @@
+{
+  "plan_name": "Semana_01_Auren_Dinero_Beginner",
+  "timezone": "Europe/Madrid",
+  "channels": [
+    {
+      "id": "auren_dinero_principiantes",
+      "name": "Auren Dinero para Principiantes",
+      "language": "es",
+      "country": "ES",
+      "target_platform": "YouTube Shorts",
+      "emotion_default": "Motivador",
+      "videos": [
+        {
+          "video_id": "dinero_001",
+          "topic": "cómo empezar a invertir para principiantes",
+          "emotion": "Motivador",
+          "target_platform": "YouTube Shorts",
+          "scheduled_day": "Lunes",
+          "slot": "dinero_principiantes"
+        },
+        {
+          "video_id": "dinero_002",
+          "topic": "Errores típicos al empezar a invertir",
+          "emotion": "Alerta",
+          "target_platform": "YouTube Shorts",
+          "scheduled_day": "Miércoles",
+          "slot": "dinero_principiantes"
+        },
+        {
+          "video_id": "dinero_003",
+          "topic": "Cómo empezar a invertir explicado a niños de 12 años",
+          "emotion": "Didáctico",
+          "target_platform": "YouTube Shorts",
+          "scheduled_day": "Viernes",
+          "slot": "dinero_principiantes"
+        }
+      ]
+    }
+  ]
+}
