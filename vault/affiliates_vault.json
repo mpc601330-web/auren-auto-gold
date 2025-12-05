@@ -1,0 +1,26 @@
+{
+  "offers": [
+    {
+      "id": "curso_inversion_basica",
+      "name": "Curso de Inversión para Principiantes 2025",
+      "url": "https://tuenlaceafiliado.com/curso-inversion",
+      "countries": ["ES", "MX", "AR"],
+      "niches": ["dinero", "inversion", "finanzas personales"],
+      "keywords": ["invertir", "principiantes", "libertad financiera"],
+      "slot": "dinero_principiantes",
+      "notes": "50% comisión, ticket medio 97€",
+      "default_cta": "Haz clic aquí y empieza hoy tu formación en inversión desde cero."
+    },
+    {
+      "id": "saas_tracking_inversion",
+      "name": "App de seguimiento de inversiones y finanzas personales",
+      "url": "https://tuenlaceafiliado.com/app-finanzas",
+      "countries": ["ES"],
+      "niches": ["dinero", "productividad"],
+      "keywords": ["seguimiento", "app", "finanzas", "control de gastos"],
+      "slot": "dinero_principiantes",
+      "notes": "SaaS recurrente, comisión mensual sobre suscripción.",
+      "default_cta": "Prueba gratis la app que te ayuda a controlar tus inversiones y tu dinero."
+    }
+  ]
+}
