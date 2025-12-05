@@ -1,0 +1,21 @@
+{
+  "meta": {
+    "version": "1.0",
+    "generated_at": "2025-12-05T12:00:00Z",
+    "notes": "Plan de ejemplo generado a mano para Auren Media Brain."
+  },
+  "videos": [
+    {
+      "video_id": "auren-2025-12-05-001",
+      "channel_name": "Auren Dinero para Principiantes",
+      "topic": "cómo empezar a invertir para principiantes",
+      "emotion": "motivador",
+      "target_platform": "shorts",
+      "country": "ES",
+      "language": "es",
+      "affiliate_slot": "curso_inversion_principiantes",
+      "priority": "alta",
+      "notes": "Vídeo de prueba del plan Brain para testear AutoGold en modo Brain."
+    }
+  ]
+}
