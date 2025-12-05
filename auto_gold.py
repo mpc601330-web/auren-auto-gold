@@ -572,7 +572,6 @@ def send_to_render_server(
 # ============================================================
 # 8) PIPELINE GOLD COMPLETO (ya con AGENTES AUREN)
 # ============================================================
-
 def run_gold_pipeline(
     niche: str,
     country_code: str = "ES",
@@ -586,7 +585,6 @@ def run_gold_pipeline(
     channel_name: str | None = None,
     affiliate_slot: str | None = None,
 ) -> str:
-
     """
     1) MIND: genera lista de topics a partir de un NICHO.
     2) EMPIRE: calcula money_score para cada topic (HUB /topic_money_flow).
@@ -600,7 +598,7 @@ def run_gold_pipeline(
        - Títulos (AUREN_TITLE_LAB).
        - Traducción por plataforma (AUREN_PLATFORM_TRANSLATOR).
        - Descripción + hashtags (DESCRIPTION_ENGINE + HASHTAG_ENGINE).
-       - Hotmart + SaaS (AUREN_HOTMART_ENGINE + AUREN_SAAS_ENGINE).
+       - Hotmart + SaaS (AUREN_HOTMART_ENGINE + AUREN_SAAS_ENGINE + VAULT si existe).
        - Llama a HUB /media_plan (miniatura + B-roll) con guion V2.
        - Predicción de CTR (CTR_FORECASTER).
        - Llama a HUB /quality_analyze (QA) con guion V2.
@@ -649,6 +647,14 @@ def run_gold_pipeline(
         "- QUALITY ENGINE (QA vía HUB)\n"
         "- RENDER SERVER (cola lógica de vídeo)\n"
     )
+
+    # 🔎 Contexto de ejecución (canal + slot de afiliado)
+    if channel_name or affiliate_slot:
+        out.append("\n## 🧩 Contexto de ejecución\n")
+        if channel_name:
+            out.append(f"- Canal: **{channel_name}**")
+        if affiliate_slot:
+            out.append(f"- Affiliate slot: **{affiliate_slot}**")
 
     # Bloque MIND
     out.append("\n## 🧠 MIND ENGINE — Discover hot topics\n")
@@ -885,33 +891,56 @@ def run_gold_pipeline(
         out.append("```")
 
         # ==========================
-        # AFFILIATES: HOTMART + SaaS
+        # AFFILIATES: HOTMART + SaaS + VAULT
         # ==========================
         out.append(
-            "\n### 💸 Encaje de afiliados (AUREN_HOTMART_ENGINE + AUREN_SAAS_ENGINE)\n"
+            "\n### 💸 Encaje de afiliados (AUREN_HOTMART_ENGINE + AUREN_SAAS_ENGINE + VAULT)\n"
         )
 
+        # Hotmart
         hotmart_data = run_hotmart_engine(
             {
                 "topic": topic,
                 "audience": audience,
+                "channel_name": channel_name,
+                "affiliate_slot": affiliate_slot,
             }
         )
         hotmart_raw = hotmart_data.get("hotmart_suggestion_raw", "").strip()
 
+        # SaaS
         saas_data = run_saas_engine(
             {
                 "topic": topic,
                 "audience": audience,
+                "channel_name": channel_name,
+                "affiliate_slot": affiliate_slot,
             }
         )
         saas_raw = saas_data.get("saas_suggestion_raw", "").strip()
+
+        # VAULT (si existe run_affiliates_vault, lo usamos; si no, no rompemos nada)
+        vault_raw = ""
+        try:
+            vault_data = run_affiliates_vault(
+                {
+                    "topic": topic,
+                    "niche": niche,
+                    "channel_name": channel_name,
+                    "affiliate_slot": affiliate_slot,
+                }
+            )
+            vault_raw = vault_data.get("vault_markdown", "").strip()
+        except NameError:
+            vault_raw = "⚠️ Auren Affiliates Vault aún no está conectado en este entorno."
 
         out.append("```markdown")
         out.append("#### Hotmart\n")
         out.append(hotmart_raw or "⚠️ Sin sugerencia Hotmart.")
         out.append("\n\n#### SaaS recurrente\n")
         out.append(saas_raw or "⚠️ Sin sugerencia SaaS.")
+        out.append("\n\n#### VAULT / Enlace final\n")
+        out.append(vault_raw or "⚠️ Sin respuesta de VAULT.")
         out.append("```")
 
         # ==========================
@@ -1053,7 +1082,6 @@ def run_gold_pipeline(
     out.append("```")
 
     return "\n".join(out)
-
 
 def main():
     # ¿Hay plan de Auren Brain?
