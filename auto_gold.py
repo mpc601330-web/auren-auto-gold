@@ -506,11 +506,6 @@ def send_to_render_server(
     language: str = "es",
     audience: str | None = None,
 ) -> Dict[str, Any]:
-    """
-    Envía un job sencillo al AUREN RENDER SERVER.
-    Ahora mismo solo encola el trabajo (no monta todavía el vídeo real).
-    """
-
     if not RENDER_URL:
         return {
             "status": "disabled",
@@ -525,11 +520,10 @@ def send_to_render_server(
         aspect_ratio = "16:9"
         resolution = "1920x1080"
 
-    # De momento enviamos una única escena 'talking_head' con todo el guion.
     scenes = [
         {
             "type": "talking_head",
-            "duration": 60.0,  # dummy, ya lo ajustaremos
+            "duration": 60.0,
             "text": script_v2[:4000],
         }
     ]
@@ -553,9 +547,19 @@ def send_to_render_server(
     try:
         r = requests.post(RENDER_URL, json=payload, timeout=20)
         r.raise_for_status()
-        data = r.json()
+
+        # Intentar parsear JSON; si no, devolver texto crudo
+        try:
+            data = r.json()
+        except Exception:
+            data = {
+                "status": "ok_raw",
+                "raw_text": r.text[:500],  # primeros 500 chars para inspección
+            }
+
         data.setdefault("render_url", RENDER_URL)
         return data
+
     except Exception as e:
         return {
             "status": "error",
@@ -563,9 +567,7 @@ def send_to_render_server(
             "error": str(e),
         }
 
-# ============================================================
-# 8) PIPELINE GOLD COMPLETO (ya con AGENTES AUREN)
-# ============================================================
+
 
 # ============================================================
 # 8) PIPELINE GOLD COMPLETO (ya con AGENTES AUREN)
