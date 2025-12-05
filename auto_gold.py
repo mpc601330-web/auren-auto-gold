@@ -990,53 +990,69 @@ def run_gold_pipeline(
 
     return "\n".join(out)
 
-def get_seed_from_brain_or_default():
-    """
-    Si hay un plan de Brain, lo usamos.
-    Si no, usamos el sistema actual de AutoGold.
-    """
-    brain_plan_path = os.getenv("AUREN_BRAIN_PLAN_PATH", "").strip()
-
-    if brain_plan_path:
-        plan = load_brain_plan(brain_plan_path)
-        video_cfg = pick_video_from_brain(plan)
-        if video_cfg:
-            print("🧠 Usando plan de Auren Brain:")
-            print(f"   Canal: {video_cfg['channel_name']}")
-            print(f"   Topic: {video_cfg['topic']}")
-            print(f"   Video ID: {video_cfg['video_id']}")
-            return video_cfg
-
-    # 🔁 fallback: comportamiento actual que ya tienes
-    # Aquí llamas a tu lógica antigua de MIND ENGINE / selección de canal+topic.
-    # EJEMPLO (ajústalo a tu código real):
-    from agents.mind_engine import pick_random_topic  # ficticio, pon el tuyo
-    return pick_random_topic()
-
 def main():
     # =====================================================
-    # 1) AUREN TOPIC SCOUT  → semillas de contenido
+    # 0) Intentar usar AUREN BRAIN primero
     # =====================================================
-    seeds = discover_hot_seeds()
-    job = pick_next_job(seeds)
+    brain_plan_path = os.getenv("AUREN_BRAIN_PLAN_PATH", "").strip()
+    from_brain = False
 
-    if not job:
-        print("⚠️ No hay temas nuevos disponibles (todas las semillas ya se usaron).")
-        return
+    if brain_plan_path:
+        try:
+            plan = load_brain_plan(brain_plan_path)
+            video_cfg = pick_video_from_brain(plan)
+        except Exception as e:
+            print(f"⚠️ Error cargando plan de Auren Brain: {e}")
+            video_cfg = None
+    else:
+        video_cfg = None
 
-    channel = job["channel"]
-    seed = job["seed"]
-    topic_slug = job["topic_slug"]
+    if video_cfg:
+        # 🔮 MODO BRAIN: el propio Brain ya ha decidido canal + topic
+        from_brain = True
 
-    print("🧠 Canal seleccionado:", channel["name"])
-    print("🌱 Semilla seleccionada:", seed.keyword)
-    print("🪪 Topic slug:", topic_slug)
+        channel = {
+            "id": video_cfg.get("channel_id", video_cfg["channel_name"]),
+            "name": video_cfg["channel_name"],
+            "country": video_cfg.get("country", "ES"),
+            "language": video_cfg.get("language", "es"),
+        }
+
+        seed_keyword = video_cfg["topic"]          # será el NICHO/TEMA base
+        topic_slug = video_cfg["video_id"]         # ID interno de Brain
+
+        print("🧠 AUREN BRAIN ha elegido el vídeo:")
+        print(f"   Canal: {channel['name']}")
+        print(f"   País: {channel['country']}  |  Idioma: {channel['language']}")
+        print(f"   Topic: {seed_keyword}")
+        print(f"   Video ID (Brain): {topic_slug}")
+
+    else:
+        # =====================================================
+        # 1) AUREN TOPIC SCOUT  → semillas de contenido (modo clásico)
+        # =====================================================
+        seeds = discover_hot_seeds()
+        job = pick_next_job(seeds)
+
+        if not job:
+            print("⚠️ No hay temas nuevos disponibles (todas las semillas ya se usaron).")
+            return
+
+        channel = job["channel"]
+        seed = job["seed"]
+        topic_slug = job["topic_slug"]
+
+        seed_keyword = seed.keyword
+
+        print("🧠 Canal seleccionado:", channel["name"])
+        print("🌱 Semilla seleccionada:", seed_keyword)
+        print("🪪 Topic slug:", topic_slug)
 
     # =====================================================
     # 2) Config derivada de la semilla + canal
-    #    (lo que antes estaba hardcodeado)
+    #    (igual que antes, pero usando seed_keyword)
     # =====================================================
-    niche = seed.keyword            # ahora MIND usa la semilla, no "dinero y libertad" fijo
+    niche = seed_keyword
     country_code = channel["country"]
     lang_topics = channel["language"]
 
@@ -1064,8 +1080,9 @@ def main():
 
     print(markdown)
 
-    # Marcar esta semilla como usada para este canal
-    mark_used(channel["id"], topic_slug)
+    # Solo marcamos como usada la semilla si venimos del sistema antiguo
+    if not from_brain:
+        mark_used(channel["id"], topic_slug)
 
     # ==========================
     #  GUARDADO AUTOMÁTICO /outputs
@@ -1103,7 +1120,6 @@ def main():
         f.write(video_plan_content)
 
     print(f"📦 Plan de vídeo guardado en: {video_plan_path}")
-
 
 if __name__ == "__main__":
     main()
