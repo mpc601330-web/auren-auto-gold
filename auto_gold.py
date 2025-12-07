@@ -1,6 +1,7 @@
 # auto_gold.py — ORQUESTADOR EXTERNO AUREN AUTO GOLD
 # Llama (directa o indirectamente) a:
 # - MIND ENGINE  → descubre topics calientes (local)
+# - AUREN MEDIA BRAIN (Space opcional) → plan estratégico por vídeo
 # - AUREN-API-HUB:
 #       /topic_money_flow   (EMPIRE SCALER)
 #       /media_plan         (MEDIA FACTORY)
@@ -16,6 +17,7 @@ from typing import List, Dict, Any
 
 from gradio_client import Client
 import requests  # 👈 para Pexels / Pixabay
+
 from agents.topic_scout import discover_hot_seeds
 from agents.channel_router import pick_next_job
 from topic_memory import mark_used
@@ -57,6 +59,7 @@ from agents.dashboard_engine import run_agent as run_dashboard_engine
 from agents.trend_oracle import run_agent as run_trend_oracle
 from agents.channel_evaluator import run_agent as run_channel_evaluator
 
+
 # ==============================
 # MAPEOS DESDE AUREN BRAIN
 # ==============================
@@ -96,12 +99,30 @@ def map_platform(brain_platform: str) -> str:
     # fallback: formato vertical corto por defecto
     return "YouTube Shorts"
 
+
+# --------------------------
+# Helper simple para slugs
+# --------------------------
+def slugify(text: str) -> str:
+    import re
+
+    t = (text or "").lower().strip()
+    t = re.sub(r"[^\w\s-]", "", t)
+    t = re.sub(r"[\s_-]+", "-", t)
+    t = re.sub(r"^-+|-+$", "", t)
+    return t or "topic"
+
+
 # ==============================
 # CONFIG: IDs de tus Spaces
 # ==============================
 
 HUB_SPACE_ID = os.getenv("AUREN_HUB_SPACE_ID", "Mariapc601/AUREN-API-HUB").strip()
 CREATIVE_SPACE_ID = os.getenv("AUREN_CREATIVE_SPACE_ID", "Mariapc601/AUREN-CREATIVE-ENGINE").strip()
+
+# MEDIA BRAIN (Space opcional)
+BRAIN_SPACE_ID = os.getenv("AUREN_BRAIN_SPACE_ID", "").strip()
+
 # Render Server (cola de vídeo)
 RENDER_URL = os.getenv(
     "AUREN_RENDER_URL",
@@ -121,6 +142,74 @@ def get_client(space_id: str) -> Client:
     if HF_TOKEN:
         os.environ["HF_TOKEN"] = HF_TOKEN
     return Client(space_id)
+
+
+# Cliente cacheado para el BRAIN (para no crearlo mil veces)
+_brain_client: Client | None = None
+
+
+def get_brain_client() -> Client | None:
+    global _brain_client
+
+    if not BRAIN_SPACE_ID:
+        return None
+
+    if _brain_client is not None:
+        return _brain_client
+
+    try:
+        if HF_TOKEN:
+            os.environ["HF_TOKEN"] = HF_TOKEN
+        _brain_client = Client(BRAIN_SPACE_ID)
+        # El propio gradio_client ya imprime el "Loaded as API: ..."
+        return _brain_client
+    except Exception as e:
+        print(f"⚠️ Error cargando AUREN-MEDIA-BRAIN ({BRAIN_SPACE_ID}): {e}")
+        _brain_client = None
+        return None
+
+
+# ======================================
+#   AUREN MEDIA BRAIN — helper opcional
+# ======================================
+
+def brain_enrich_plan(
+    channel_name: str | None,
+    seed_topic: str,
+    topic_slug: str,
+    niche: str,
+    country: str = "ES",
+    language: str = "es",
+) -> Dict[str, Any] | None:
+    """
+    Llama al Space AUREN MEDIA BRAIN (si está disponible) para que:
+      - valide el topic seed
+      - proponga variaciones
+      - dé prioridades para producción
+
+    Depende de que el Space exponga un endpoint `brain_plan`.
+    Si algo falla, devuelve None y AUTO GOLD sigue como siempre.
+    """
+    client = get_brain_client()
+    if client is None:
+        return None
+
+    try:
+        result = client.predict(
+            channel_name or "",
+            seed_topic,
+            topic_slug,
+            niche,
+            country,
+            language,
+            api_name="brain_plan",  # 👉 endpoint que tendrá el Space del Brain
+        )
+        # Puede devolver dict o string; lo tratamos luego
+        return result
+    except Exception as e:
+        print(f"⚠️ Error llamando a AUREN MEDIA BRAIN (brain_plan): {e}")
+        return None
+
 
 # ============================================================
 # WRAPPER para AUREN-CREATIVE-ENGINE (Space remoto)
@@ -156,6 +245,7 @@ def run_creative_engine(params: dict) -> str:
     if isinstance(result, str):
         return result
     return str(result)
+
 
 # ============================================================
 # 1) MIND ENGINE — descubrir topics a partir de un NICHO
@@ -495,6 +585,7 @@ def pixabay_search_and_download(keywords: list[str], target_folder: str, max_vid
 
     return saved_files
 
+
 # ============================================================
 # 7) RENDER SERVER — Encola el vídeo en el Space de render
 # ============================================================
@@ -505,7 +596,7 @@ def send_to_render_server(
     platform: str,
     language: str = "es",
     audience: str | None = None,
-    assets_folder: str | None = None,  # 🔧 FIX Pendragon: añadimos assets_folder
+    assets_folder: str | None = None,  # 🔧 Pendragon: añadimos assets_folder
 ) -> Dict[str, Any]:
     if not RENDER_URL:
         return {
@@ -543,7 +634,7 @@ def send_to_render_server(
             "mood": "motivational",
             "intensity": "medium",
         },
-        "assets_folder": assets_folder,  # 🔧 FIX Pendragon: lo mandamos al Render Server
+        "assets_folder": assets_folder,  # 👈 se manda al Render Server
     }
 
     try:
@@ -568,7 +659,8 @@ def send_to_render_server(
             "render_url": RENDER_URL,
             "error": str(e),
         }
-        
+
+
 # ============================================================
 # 🔐 VAULT / Helper simple y alineado con la firma real
 # ============================================================
@@ -588,11 +680,10 @@ def pick_offer_for_video(niche: str, topic: str, country_code: str):
     )
 
 
-
-
 # ============================================================
-# 8) PIPELINE GOLD COMPLETO (ya con AGENTES AUREN)
+# 8) PIPELINE GOLD COMPLETO (ya con AGENTES AUREN + BRAIN opcional)
 # ============================================================
+
 def run_gold_pipeline(
     niche: str,
     country_code: str = "ES",
@@ -610,7 +701,8 @@ def run_gold_pipeline(
     1) MIND: genera lista de topics a partir de un NICHO.
     2) EMPIRE: calcula money_score para cada topic (HUB /topic_money_flow).
     3) Ordena descendente por money_score.
-    4) Para los TOP N:
+    4) (Opcional) BRAIN: comenta el plan desde el Space AUREN MEDIA BRAIN.
+    5) Para los TOP N:
        - Genera ángulos (AUREN_ANGLE_MASTER + HOOK_ENGINE).
        - Llama a CREATIVE (guion V1).
        - Refinado (AUREN_SCRIPT_DOCTOR → guion V2).
@@ -619,13 +711,14 @@ def run_gold_pipeline(
        - Títulos (AUREN_TITLE_LAB).
        - Traducción por plataforma (AUREN_PLATFORM_TRANSLATOR).
        - Descripción + hashtags (DESCRIPTION_ENGINE + HASHTAG_ENGINE).
-       - Hotmart + SaaS (AUREN_HOTMART_ENGINE + AUREN_SAAS_ENGINE + VAULT).
+       - Hotmart + SaaS + VAULT.
        - Llama a HUB /media_plan (miniatura + B-roll) con guion V2.
+       - Descarga B-roll de Pexels / Pixabay.
        - Predicción de CTR (CTR_FORECASTER).
        - Llama a HUB /quality_analyze (QA) con guion V2.
-       - Descarga clips de apoyo (Pexels / Pixabay).
        - Plan de publicación (UPLOAD_SCHEDULER).
        - Encola vídeo en Render Server (send_to_render_server).
+
     Devuelve un markdown grande con todo + dashboard final.
     """
 
@@ -668,9 +761,10 @@ def run_gold_pipeline(
         "- MEDIA FACTORY (miniatura + B-roll vía HUB)\n"
         "- QUALITY ENGINE (QA vía HUB)\n"
         "- RENDER SERVER (cola lógica de vídeo)\n"
+        "- AUREN MEDIA BRAIN (si está activo)\n"
     )
 
-    # 🔎 Contexto de ejecución (canal + slot de afiliado)
+    # 🧩 Contexto de ejecución (canal + slot de afiliado)
     if channel_name or affiliate_slot:
         out.append("\n## 🧩 Contexto de ejecución\n")
         if channel_name:
@@ -724,6 +818,31 @@ def run_gold_pipeline(
     out.append("\n\n#### GAPS DE CONTENIDO\n")
     out.append(gaps_raw or "⚠️ No se detectaron gaps específicos.")
     out.append("```")
+
+    # =========================================
+    # 🧠 BRAIN (Space) — comentario estratégico opcional
+    # =========================================
+    seed_topic = niche
+    topic_slug = slugify(seed_topic)
+
+    brain_plan = brain_enrich_plan(
+        channel_name=channel_name,
+        seed_topic=seed_topic,
+        topic_slug=topic_slug,
+        niche=niche,
+        country=country_code,
+        language=lang_topics,
+    )
+
+    if brain_plan:
+        out.append("\n### 🧠 AUREN MEDIA BRAIN — Plan estratégico\n")
+        # Si el Brain devuelve dict con 'markdown', usamos eso.
+        if isinstance(brain_plan, dict) and "markdown" in brain_plan:
+            out.append(brain_plan["markdown"])
+        else:
+            out.append("```json")
+            out.append(json.dumps(brain_plan, ensure_ascii=False, indent=2))
+            out.append("```")
 
     # Tabla ranking EMPIRE
     out.append("\n## 💰 Ranking de topics por money_score\n")
@@ -912,7 +1031,6 @@ def run_gold_pipeline(
         out.append(hashtags_raw or "⚠️ No se generaron hashtags.")
         out.append("```")
 
-        
         # ==========================
         # AFFILIATES: HOTMART + SaaS + VAULT
         # ==========================
@@ -966,7 +1084,6 @@ def run_gold_pipeline(
             )
 
         out.append("```")
-
 
         # ==========================
         # MEDIA PLAN (con GUION V2)
@@ -1093,7 +1210,7 @@ def run_gold_pipeline(
     # ==========================
     full_markdown = "\n".join(out)
 
-    # Limitamos el tamaño para no romper el límite de tokens de Groq
+    # Limitamos el tamaño para no romper el límite de tokens de Groq (en Dashboard)
     max_chars = 6000
     if len(full_markdown) > max_chars:
         dashboard_input = full_markdown[-max_chars:]
@@ -1116,13 +1233,17 @@ def run_gold_pipeline(
     return "\n".join(out)
 
 
+# ============================================================
+# 9) MAIN — modo controlado por BRAIN o modo AutoGold clásico
+# ============================================================
+
 def main():
     # ¿Hay plan de Auren Brain?
     brain_plan_path = os.getenv("AUREN_BRAIN_PLAN_PATH", "").strip()
 
     if brain_plan_path:
         # ============================
-        # 🎛️ MODO CONTROLADO POR BRAIN
+        # 🎛️ MODO CONTROLADO POR BRAIN (plan JSON externo)
         # ============================
         plan = load_brain_plan(brain_plan_path)
         video_cfg = pick_video_from_brain(plan)
@@ -1131,7 +1252,7 @@ def main():
             print("⚠️ Auren Brain no devolvió ningún vídeo. Saliendo.")
             return
 
-        print("🧠 Auren Brain activo:")
+        print("🧠 Auren Brain activo (plan externo):")
         print("   Canal:", video_cfg["channel_name"])
         print("   Topic:", video_cfg["topic"])
         print("   Video ID:", video_cfg["video_id"])
