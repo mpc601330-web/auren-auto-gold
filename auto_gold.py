@@ -579,14 +579,24 @@ def pick_offer_for_video(*args, **kwargs):
     """
     Alias retrocompatible hacia `suggest_offer_for_video`.
 
-    Limpia parámetros que el Vault no espera (como `audience`)
-    y reenvía el resto tal cual.
+    - Limpia parámetros que el Vault no espera.
+    - Solo pasa a `suggest_offer_for_video` los kwargs cuyos nombres
+      existen en su firma real.
     """
-    # 🔧 FIX Pendragon: el Vault no acepta `audience`
-    kwargs = dict(kwargs)
-    kwargs.pop("audience", None)
 
-    return suggest_offer_for_video(*args, **kwargs)
+    import inspect
+
+    # Firmas reales de suggest_offer_for_video
+    sig = inspect.signature(suggest_offer_for_video)
+    allowed_params = set(sig.parameters.keys())
+
+    # Filtramos kwargs para quedarnos solo con los nombres válidos
+    filtered_kwargs = {
+        k: v for k, v in kwargs.items() if k in allowed_params
+    }
+
+    return suggest_offer_for_video(*args, **filtered_kwargs)
+
 
 
 
