@@ -568,7 +568,7 @@ def send_to_render_server(
             "render_url": RENDER_URL,
             "error": str(e),
         }
-
+        
 # ============================================================
 # 🔐 VAULT / Helper simple y alineado con la firma real
 # ============================================================
