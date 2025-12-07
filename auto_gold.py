@@ -570,25 +570,24 @@ def send_to_render_server(
         }
 
 
+
 # ============================================================
 # 🔐 VAULT / Alias retrocompatible
 # ============================================================
-
-# 🔧 FIX Pendragon:
-# Antes el orquestador llamaba a `pick_offer_for_video`, pero ahora
-# la función real se llama `suggest_offer_for_video` en vault_media.
-# Creamos un alias que acepta cualquier combinación de args/kwargs.
 
 def pick_offer_for_video(*args, **kwargs):
     """
     Alias retrocompatible hacia `suggest_offer_for_video`.
 
-    Permite mantener llamadas antiguas como:
-    pick_offer_for_video(topic=..., audience=..., slot=..., country_code=...)
-
-    sin romper el pipeline.
+    Limpia parámetros que el Vault no espera (como `audience`)
+    y reenvía el resto tal cual.
     """
+    # 🔧 FIX Pendragon: el Vault no acepta `audience`
+    kwargs = dict(kwargs)
+    kwargs.pop("audience", None)
+
     return suggest_offer_for_video(*args, **kwargs)
+
 
 
 # ============================================================
