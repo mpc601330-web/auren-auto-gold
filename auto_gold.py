@@ -505,6 +505,7 @@ def send_to_render_server(
     platform: str,
     language: str = "es",
     audience: str | None = None,
+    assets_folder: str | None = None,  # 🔧 FIX Pendragon: añadimos assets_folder
 ) -> Dict[str, Any]:
     if not RENDER_URL:
         return {
@@ -542,6 +543,7 @@ def send_to_render_server(
             "mood": "motivational",
             "intensity": "medium",
         },
+        "assets_folder": assets_folder,  # 🔧 FIX Pendragon: lo mandamos al Render Server
     }
 
     try:
@@ -567,6 +569,26 @@ def send_to_render_server(
             "error": str(e),
         }
 
+
+# ============================================================
+# 🔐 VAULT / Alias retrocompatible
+# ============================================================
+
+# 🔧 FIX Pendragon:
+# Antes el orquestador llamaba a `pick_offer_for_video`, pero ahora
+# la función real se llama `suggest_offer_for_video` en vault_media.
+# Creamos un alias que acepta cualquier combinación de args/kwargs.
+
+def pick_offer_for_video(*args, **kwargs):
+    """
+    Alias retrocompatible hacia `suggest_offer_for_video`.
+
+    Permite mantener llamadas antiguas como:
+    pick_offer_for_video(topic=..., audience=..., slot=..., country_code=...)
+
+    sin romper el pipeline.
+    """
+    return suggest_offer_for_video(*args, **kwargs)
 
 
 # ============================================================
@@ -1059,7 +1081,7 @@ def run_gold_pipeline(
             platform=platform,
             language=lang_topics,
             audience=audience,
-            assets_folder=assets_folder,
+            assets_folder=assets_folder,  # ahora es aceptado por la función
         )
 
         out.append("```json")
@@ -1092,6 +1114,8 @@ def run_gold_pipeline(
     out.append("```")
 
     return "\n".join(out)
+
+
 def main():
     # ¿Hay plan de Auren Brain?
     brain_plan_path = os.getenv("AUREN_BRAIN_PLAN_PATH", "").strip()
