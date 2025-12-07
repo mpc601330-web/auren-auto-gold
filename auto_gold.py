@@ -21,7 +21,7 @@ import requests  # 👈 para Pexels / Pixabay
 from agents.topic_scout import discover_hot_seeds
 from agents.channel_router import pick_next_job
 from topic_memory import mark_used
-from auren_brain_adapter import load_brain_plan, pick_video_from_brain
+from auren_brain_adapter import maybe_enrich_with_brain, load_brain_plan, pick_video_from_brain
 from vault.vault_media import load_vault, suggest_offer_for_video
 
 # ==============================
@@ -1320,7 +1320,7 @@ def main():
         return
 
     # ============================
-    # 🔁 MODO ANTIGUO (AutoGold solo)
+    # 🔁 MODO AUTOGOLD + BRAIN (seeds)
     # ============================
     seeds = discover_hot_seeds()
     job = pick_next_job(seeds)
@@ -1337,19 +1337,40 @@ def main():
     print("🌱 Semilla seleccionada:", seed.keyword)
     print("🪪 Topic slug:", topic_slug)
 
+    # Defaults básicos (por si el Brain no responde)
     niche = seed.keyword
     country_code = channel["country"]
     lang_topics = channel["language"]
-
     emotion = "Motivador"
     platform = "YouTube Shorts"
     want_thumb = True
     want_broll = True
     run_quality = True
     top_n = 1
-
-    # 🔗 También pasamos el nombre de canal al pipeline
     channel_name = channel["name"]
+    affiliate_slot = None
+
+    # 💜 Intentamos enriquecer con AUREN MEDIA BRAIN
+    brain_cfg = maybe_enrich_with_brain(
+        channel_name=channel["name"],
+        seed_topic=seed.keyword,
+        topic_slug=topic_slug,
+        niche=seed.keyword,
+        country=country_code,
+        language=lang_topics,
+    )
+
+    if brain_cfg:
+        print("🧠 Auren Media Brain activo, usando sus decisiones.")
+        channel_name = brain_cfg["channel_name"]
+        niche = brain_cfg["topic"]
+        country_code = brain_cfg["country"]
+        lang_topics = brain_cfg["language"]
+        emotion = map_emotion(brain_cfg["emotion"])
+        platform = map_platform(brain_cfg["target_platform"])
+        affiliate_slot = brain_cfg.get("affiliate_slot")
+    else:
+        print("ℹ️ Brain no disponible / sin respuesta válida. Usamos defaults.")
 
     markdown = run_gold_pipeline(
         niche=niche,
@@ -1362,7 +1383,7 @@ def main():
         run_quality=run_quality,
         top_n=top_n,
         channel_name=channel_name,
-        affiliate_slot=None,
+        affiliate_slot=affiliate_slot,
     )
 
     print(markdown)
