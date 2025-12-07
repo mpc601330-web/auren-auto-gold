@@ -2,8 +2,8 @@ name: AUREN AUTO GOLD
 
 on:
   workflow_dispatch:
-  # schedule:
-  #   - cron: "0 */6 * * *"
+    # schedule:
+    #   - cron: "0 */6 * * *"
 
 jobs:
   run-auren-gold:
@@ -13,11 +13,14 @@ jobs:
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
       GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
       GROQ_MODEL: "llama-3.3-70b-versatile"
+
       AUREN_HUB_SPACE_ID: "Mariapc601/AUREN-API-HUB"
       AUREN_CREATIVE_SPACE_ID: "Mariapc601/AUREN-CREATIVE-ENGINE"
+      AUREN_BRAIN_SPACE_ID: "Mariapc601/AUREN-MEDIA-BRAIN"   # 🧠 NUEVO
+
       PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
       PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
-      AUREN_RENDER_URL: ${{ secrets.AUREN_RENDER_URL }}   # 👈 AÑADIR ESTA LÍNEA
+      AUREN_RENDER_URL: ${{ secrets.AUREN_RENDER_URL }}       # ✅ ya lo tenías
 
     steps:
       - name: Checkout repo
@@ -36,5 +39,3 @@ jobs:
       - name: Run AUREN AUTO GOLD script
         run: |
           python auto_gold.py
-
-
