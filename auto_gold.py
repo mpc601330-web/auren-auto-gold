@@ -569,33 +569,23 @@ def send_to_render_server(
             "error": str(e),
         }
 
-
-
 # ============================================================
-# 🔐 VAULT / Alias retrocompatible
+# 🔐 VAULT / Helper simple y alineado con la firma real
 # ============================================================
 
-def pick_offer_for_video(*args, **kwargs):
+def pick_offer_for_video(niche: str, topic: str, country_code: str):
     """
-    Alias retrocompatible hacia `suggest_offer_for_video`.
-
-    - Limpia parámetros que el Vault no espera.
-    - Solo pasa a `suggest_offer_for_video` los kwargs cuyos nombres
-      existen en su firma real.
+    Helper que carga el Vault y llama a `suggest_offer_for_video`
+    con la firma real (vault, niche, topic, country_code).
     """
+    vault = load_vault()
 
-    import inspect
-
-    # Firmas reales de suggest_offer_for_video
-    sig = inspect.signature(suggest_offer_for_video)
-    allowed_params = set(sig.parameters.keys())
-
-    # Filtramos kwargs para quedarnos solo con los nombres válidos
-    filtered_kwargs = {
-        k: v for k, v in kwargs.items() if k in allowed_params
-    }
-
-    return suggest_offer_for_video(*args, **filtered_kwargs)
+    return suggest_offer_for_video(
+        vault=vault,
+        niche=niche,
+        topic=topic,
+        country_code=country_code,
+    )
 
 
 
@@ -922,6 +912,7 @@ def run_gold_pipeline(
         out.append(hashtags_raw or "⚠️ No se generaron hashtags.")
         out.append("```")
 
+        
         # ==========================
         # AFFILIATES: HOTMART + SaaS + VAULT
         # ==========================
@@ -947,9 +938,8 @@ def run_gold_pipeline(
 
         # 🔐 VAULT — Enlace final real
         vault_offer = pick_offer_for_video(
+            niche=niche,
             topic=topic,
-            audience=audience,
-            slot=affiliate_slot or "dinero_principiantes",
             country_code=country_code,
         )
 
@@ -976,6 +966,7 @@ def run_gold_pipeline(
             )
 
         out.append("```")
+
 
         # ==========================
         # MEDIA PLAN (con GUION V2)
