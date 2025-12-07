@@ -1,6 +1,6 @@
 import os
 from typing import List, Dict, Union
-from groq import Groq
+from groq import Groq, RateLimitError  # 👈 importamos también RateLimitError
 
 # =========================
 #  CONFIGURACIÓN DEL MODELO
@@ -42,19 +42,42 @@ def _chat_with_messages(
     """
     Llamada básica a Groq usando una lista de mensajes.
     La usan los agentes internos.
+
+    👉 Devuelve SIEMPRE un string:
+       - Respuesta normal del modelo
+       - O un texto de error controlado empezando por:
+         - 'ERROR_RATE_LIMIT:'
+         - 'ERROR_LLM:'
     """
     client = _get_client()
     model_name = model or DEFAULT_MODEL
 
-    resp = client.chat.completions.create(
-        model=model_name,
-        messages=messages,
-        temperature=temperature,
-        max_tokens=max_tokens,
-    )
+    try:
+        resp = client.chat.completions.create(
+            model=model_name,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+        # Groq devuelve el contenido en resp.choices[0].message.content
+        return resp.choices[0].message.content.strip()
 
-    # Groq devuelve el contenido en resp.choices[0].message.content
-    return resp.choices[0].message.content.strip()
+    except RateLimitError as e:
+        # ⚠️ Límite diario de tokens alcanzado: NO rompemos el pipeline
+        print(f"⚠️ Groq RateLimitError en _chat_with_messages: {e}")
+        return (
+            "ERROR_RATE_LIMIT: El modelo de Groq ha alcanzado el límite diario de tokens. "
+            "Este texto es un fallback automático desde agents/auren_llm.py. "
+            "Los agentes que intenten parsear esta respuesta deben tratarla como error suave."
+        )
+
+    except Exception as e:
+        # Cualquier otro error de red / API → también devolvemos texto controlado
+        print(f"⚠️ Error genérico llamando a Groq en _chat_with_messages: {e}")
+        return (
+            f"ERROR_LLM: No se ha podido llamar al modelo de Groq. "
+            f"Detalle técnico: {e}"
+        )
 
 
 def chat_completion(
@@ -74,12 +97,13 @@ def chat_completion(
 
     - Si `system_prompt` es una lista, se asume que ya es la lista completa de mensajes.
     - Si es un string, se construye la conversación con system + user.
+
+    👉 Siempre devuelve un string (normal o de error).
     """
 
     # Caso 2: ya nos pasan messages (lista de dicts)
     if isinstance(system_prompt, list):
         messages = system_prompt  # type: ignore[assignment]
-
     else:
         # Caso 1: system_prompt (str) + user_prompt (str)
         messages: List[Dict[str, str]] = []
@@ -94,5 +118,3 @@ def chat_completion(
         temperature=temperature,
         max_tokens=max_tokens,
     )
-
-
