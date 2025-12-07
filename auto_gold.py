@@ -598,12 +598,13 @@ def run_gold_pipeline(
        - Títulos (AUREN_TITLE_LAB).
        - Traducción por plataforma (AUREN_PLATFORM_TRANSLATOR).
        - Descripción + hashtags (DESCRIPTION_ENGINE + HASHTAG_ENGINE).
-       - Hotmart + SaaS (AUREN_HOTMART_ENGINE + AUREN_SAAS_ENGINE + VAULT si existe).
+       - Hotmart + SaaS (AUREN_HOTMART_ENGINE + AUREN_SAAS_ENGINE + VAULT).
        - Llama a HUB /media_plan (miniatura + B-roll) con guion V2.
        - Predicción de CTR (CTR_FORECASTER).
        - Llama a HUB /quality_analyze (QA) con guion V2.
        - Descarga clips de apoyo (Pexels / Pixabay).
        - Plan de publicación (UPLOAD_SCHEDULER).
+       - Encola vídeo en Render Server (send_to_render_server).
     Devuelve un markdown grande con todo + dashboard final.
     """
 
@@ -897,50 +898,52 @@ def run_gold_pipeline(
             "\n### 💸 Encaje de afiliados (AUREN_HOTMART_ENGINE + AUREN_SAAS_ENGINE + VAULT)\n"
         )
 
-        # Hotmart
         hotmart_data = run_hotmart_engine(
             {
                 "topic": topic,
                 "audience": audience,
-                "channel_name": channel_name,
-                "affiliate_slot": affiliate_slot,
             }
         )
         hotmart_raw = hotmart_data.get("hotmart_suggestion_raw", "").strip()
 
-        # SaaS
         saas_data = run_saas_engine(
             {
                 "topic": topic,
                 "audience": audience,
-                "channel_name": channel_name,
-                "affiliate_slot": affiliate_slot,
             }
         )
         saas_raw = saas_data.get("saas_suggestion_raw", "").strip()
 
-        # VAULT (si existe run_affiliates_vault, lo usamos; si no, no rompemos nada)
-        vault_raw = ""
-        try:
-            vault_data = run_affiliates_vault(
-                {
-                    "topic": topic,
-                    "niche": niche,
-                    "channel_name": channel_name,
-                    "affiliate_slot": affiliate_slot,
-                }
-            )
-            vault_raw = vault_data.get("vault_markdown", "").strip()
-        except NameError:
-            vault_raw = "⚠️ Auren Affiliates Vault aún no está conectado en este entorno."
+        # 🔐 VAULT — Enlace final real
+        vault_offer = pick_offer_for_video(
+            topic=topic,
+            audience=audience,
+            slot=affiliate_slot or "dinero_principiantes",
+            country_code=country_code,
+        )
 
         out.append("```markdown")
         out.append("#### Hotmart\n")
         out.append(hotmart_raw or "⚠️ Sin sugerencia Hotmart.")
         out.append("\n\n#### SaaS recurrente\n")
         out.append(saas_raw or "⚠️ Sin sugerencia SaaS.")
+
         out.append("\n\n#### VAULT / Enlace final\n")
-        out.append(vault_raw or "⚠️ Sin respuesta de VAULT.")
+        if vault_offer:
+            out.append(f"- Oferta seleccionada: **{vault_offer.get('name', '')}**")
+            out.append(f"- URL afiliada: {vault_offer.get('url', '⚠️ Sin URL definida')}")
+            notes = vault_offer.get("notes")
+            if notes:
+                out.append(f"- Notas: {notes}")
+            cta = vault_offer.get("default_cta")
+            if cta:
+                out.append(f"- CTA sugerida: {cta}")
+        else:
+            out.append(
+                "⚠️ No hay ninguna oferta en el Vault que encaje con este tema "
+                "(revisa `vault/affiliates_vault.json`)."
+            )
+
         out.append("```")
 
         # ==========================
@@ -975,6 +978,10 @@ def run_gold_pipeline(
             out.append("\n### 🎞️ Clips descargados automáticamente\n")
             out.append(f"- Pexels: {len(pex_files)} vídeos")
             out.append(f"- Pixabay: {len(pix_files)} vídeos")
+
+        else:
+            # Si no hay B-roll, no hay assets_folder
+            assets_folder = None
 
         # ==========================
         # CTR FORECASTER (título + miniatura)
@@ -1046,9 +1053,6 @@ def run_gold_pipeline(
         # ==========================
         out.append("\n### 🧩 Render job (AUREN RENDER SERVER)\n")
 
-        # Usamos la misma carpeta de assets que hemos llenado más arriba
-        assets_folder = f"videos/assets_{topic.replace(' ', '_')}"
-
         render_res = send_to_render_server(
             template_id="motivacional_v1",
             script_v2=script_v2,
@@ -1088,7 +1092,6 @@ def run_gold_pipeline(
     out.append("```")
 
     return "\n".join(out)
-
 def main():
     # ¿Hay plan de Auren Brain?
     brain_plan_path = os.getenv("AUREN_BRAIN_PLAN_PATH", "").strip()
@@ -1240,8 +1243,8 @@ def main():
 
     video_plan_content = (
         "# 🎬 AUREN VIDEO PLAN\n\n"
-            "## 📝 Guion + Producción\n\n"
-            f"{markdown}\n"
+        "## 📝 Guion + Producción\n\n"
+        f"{markdown}\n"
     )
 
     with open(video_plan_path, "w", encoding="utf-8") as f:
