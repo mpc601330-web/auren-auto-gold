@@ -1,21 +1,44 @@
 # auren_brain_adapter.py
 """
-Adaptador entre AUREN AUTO GOLD y el Space remoto AUREN MEDIA BRAIN.
+Adaptador entre AUREN AUTO GOLD y AUREN MEDIA BRAIN.
 
-- Llama al endpoint /brain_plan del Space.
-- Devuelve un pequeño dict listo para usar en auto_gold.py
-  (topic, emoción, plataforma, affiliate_slot, etc.).
+Incluye dos modos:
+
+1) 🔌 Modo remoto (Space HuggingFace)
+   - maybe_enrich_with_brain(...) llama al endpoint /brain_plan
+     del Space "AUREN-MEDIA-BRAIN" y devuelve una config de vídeo.
+
+2) 📁 Modo archivo local (plan JSON en disco)
+   - load_brain_plan(path) lee un JSON con el plan del Brain.
+   - pick_video_from_brain(plan) elige un vídeo del plan.
+     (usado por auto_gold.py cuando se usa AUREN_BRAIN_PLAN_PATH)
+
+Ambos devuelven una estructura homogénea:
+{
+    "channel_name": str,
+    "country": str,
+    "language": str,
+    "topic": str,
+    "video_id": str,
+    "emotion": str,
+    "target_platform": str,
+    "affiliate_slot": str | None,
+}
 """
 
 import os
 import json
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from gradio_client import Client
 
 HF_TOKEN = os.getenv("HF_TOKEN", "").strip()
 BRAIN_SPACE_ID = os.getenv("AUREN_BRAIN_SPACE_ID", "").strip()
 
+
+# =====================================================
+# 🔌 CLIENTE REMOTO PARA EL SPACE AUREN MEDIA BRAIN
+# =====================================================
 
 def _get_brain_client() -> Client:
     """
@@ -69,6 +92,33 @@ def _call_brain_plan(
     return result
 
 
+def _extract_video_cfg_from_plan(plan: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """
+    Normaliza un plan del Brain (sea remoto o desde archivo)
+    a la estructura mínima que necesita AutoGold.
+    """
+    videos = plan.get("videos") or []
+    if not videos:
+        return None
+
+    v = videos[0]  # por ahora usamos el primer vídeo del plan
+
+    return {
+        "channel_name": plan.get("channel_name") or "Canal_sin_nombre",
+        "country": plan.get("country") or "ES",
+        "language": plan.get("language") or "es",
+        "topic": v.get("topic") or v.get("seed_topic") or "tema_sin_titulo",
+        "video_id": v.get("video_id") or v.get("topic_slug") or "video_sin_id",
+        "emotion": v.get("emotion") or "aspiracional",
+        "target_platform": v.get("target_platform") or "shorts",
+        "affiliate_slot": v.get("affiliate_slot"),
+    }
+
+
+# =====================================================
+# 🟣 API PRINCIPAL PARA AUTO GOLD (modo remoto)
+# =====================================================
+
 def maybe_enrich_with_brain(
     channel_name: str,
     seed_topic: str,
@@ -76,7 +126,7 @@ def maybe_enrich_with_brain(
     niche: str,
     country: str,
     language: str,
-) -> Dict[str, Any] | None:
+) -> Optional[Dict[str, Any]]:
     """
     Si hay BRAIN configurado, pide un plan y devuelve la config de un vídeo.
     Si algo falla → devuelve None y Auto Gold sigue con defaults.
@@ -110,20 +160,35 @@ def maybe_enrich_with_brain(
         print("⚠️ Error llamando a AUREN MEDIA BRAIN:", e)
         return None
 
-    videos = plan.get("videos") or []
-    if not videos:
+    cfg = _extract_video_cfg_from_plan(plan)
+    if not cfg:
         print("⚠️ Brain devolvió un plan sin vídeos. Se ignora.")
         return None
 
-    v = videos[0]  # por ahora usamos el primer vídeo del plan
+    return cfg
 
-    return {
-        "channel_name": plan.get("channel_name") or channel_name,
-        "country": plan.get("country") or country,
-        "language": plan.get("language") or language,
-        "topic": v.get("topic") or seed_topic,
-        "video_id": v.get("video_id") or topic_slug,
-        "emotion": v.get("emotion") or "aspiracional",
-        "target_platform": v.get("target_platform") or "shorts",
-        "affiliate_slot": v.get("affiliate_slot"),
-    }
+
+# =====================================================
+# 📁 MODO ARCHIVO LOCAL (compatibilidad AUREN_BRAIN_PLAN_PATH)
+# =====================================================
+
+def load_brain_plan(path: str) -> Dict[str, Any]:
+    """
+    Lee un archivo JSON con el plan del Brain.
+    Usado cuando se define AUREN_BRAIN_PLAN_PATH en el entorno.
+    """
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    if not isinstance(data, dict):
+        raise RuntimeError(f"El archivo de Brain plan no contiene un objeto JSON válido: {path}")
+
+    return data
+
+
+def pick_video_from_brain(plan: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """
+    Elige un vídeo del plan cargado desde archivo y lo normaliza.
+    Misma estructura que maybe_enrich_with_brain.
+    """
+    return _extract_video_cfg_from_plan(plan)
